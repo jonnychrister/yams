@@ -529,6 +529,15 @@ const RARE_DICE = [
     check: ctx => ctx.key==='yams' && ctx.score>0 && ctx.filledCountBefore===0},
   {id:'lewis-yamilton', name:'Lewis Yamilton', flavor:"It's Yammertime", color:'#00A19B', trigger:'turn',
     check: ctx => ctx.key==='fullhouse' && ctx.score>0 && ctx.rerollsLeft===2},
+  {id:'gordon-yamsay', name:'Gordon Yamsay', flavor:'Idiot sandwich...', color:'#8F6B1F', trigger:'gameEnd',
+    check: (player, variant) => computeTotal(player.scores) < 90},
+  {id:'jean-claude-van-yamme', name:'Jean-Claude van Yamme', flavor:'Flexible', color:'#6B6B80', trigger:'turn',
+    check: ctx => ctx.rerollsLeft===0 && ctx.held.every(h=>!h) && ctx.score>0 && !NUM_KEYS.includes(ctx.key)},
+  {id:'yamesses-ii', name:'Yamesses II', flavor:'Ascend the throne', color:'#C9A227', trigger:'special'},
+  {id:'yameron-diaz', name:'Yameron Diaz', flavor:"There's something about Yams", color:'#FF8FA3', trigger:'gameEnd',
+    check: (player) => Object.keys(player.scores).every(k => player.scores[k] > 0)},
+  {id:'yameela-yamil', name:'Yameela Yamil', flavor:'Yams is all you need', color:'#3D9CD6', trigger:'gameEnd',
+    check: (player) => player.scores.yams>0 && player.scores.sequence===0 && player.scores.fullhouse===0},
 ];
 function checkTurnRareDice(ctx){
   if(!ctx.player.earnedRareDice) ctx.player.earnedRareDice = [];
@@ -1716,14 +1725,31 @@ async function autoSaveOnlineHistory(){
     state.historyDocId = docId;
 
     let currentTop = 0;
+    let previousHolderUsername = null;
     try{
       const topSnap = await fbDb.collection('players').orderBy(`stats.${state.variant}.highestScore`,'desc').limit(1).get();
-      if(!topSnap.empty) currentTop = (topSnap.docs[0].data().stats[state.variant]||{}).highestScore || 0;
+      if(!topSnap.empty){
+        currentTop = (topSnap.docs[0].data().stats[state.variant]||{}).highestScore || 0;
+        previousHolderUsername = topSnap.docs[0].id;
+      }
     } catch(e){ console.error('Leaderboard check failed', e); }
 
     state.highScoreFlags = {};
     for(const r of results){
       if(!r.username) continue;
+      const isAllTimeBest = r.score > currentTop;
+      if(isAllTimeBest){
+        // Yamesses II: dethroning the reigning record holder in a game they were actually part of
+        if(previousHolderUsername && previousHolderUsername !== r.username && usernames.includes(previousHolderUsername)){
+          const dethroner = state.players.find(p => p.username === r.username);
+          if(dethroner){
+            if(!dethroner.earnedRareDice) dethroner.earnedRareDice = [];
+            if(!dethroner.earnedRareDice.includes('yamesses-ii')) dethroner.earnedRareDice.push('yamesses-ii');
+          }
+        }
+        currentTop = r.score; // so a later player in the same game can't also claim it at a lower score
+      }
+
       const ref = fbDb.collection('players').doc(r.username);
       let personalBest = false;
       const isWinner = winnerUsernames.includes(r.username);
@@ -1748,10 +1774,8 @@ async function autoSaveOnlineHistory(){
           if(currentUser && currentUser.usernameLower === r.username){ currentUser.stats = stats; currentUser.rareDice = rareDice; }
         });
       } catch(e){ console.error('Stats update failed for', r.username, e); }
-      const isAllTimeBest = r.score > currentTop;
       state.highScoreFlags[r.username] = {personalBest, allTimeBest: isAllTimeBest};
       if(isAllTimeBest){
-        currentTop = r.score; // so a later player in the same game can't also claim it at a lower score
         fbDb.collection('meta').doc('records').set({[state.variant]: r.username}, {merge:true}).catch(e => console.error('Record holder update failed', e));
       }
     }
