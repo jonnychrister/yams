@@ -165,6 +165,30 @@
   .highscore-banner.personal{ background: var(--blue); color:#fff; font-size:12px; box-shadow:4px 4px 0 var(--ink); }
   .highscore-banner.alltime{ background: var(--yellow); color:var(--ink); font-size:14px; box-shadow:6px 6px 0 var(--held); }
   .highscore-banner.bigplay{ background: var(--purple); color:#fff; font-size:12px; box-shadow:4px 4px 0 var(--ink); }
+  .raredie-grid{ display:grid; grid-template-columns: repeat(auto-fill, minmax(44px,1fr)); gap:8px; margin-top:8px; max-width:280px; }
+  .raredie-icon{
+    position:relative; width:44px; height:44px; border:3px solid var(--ink); border-radius:8px;
+    display:flex; align-items:center; justify-content:center; font-family:'Press Start 2P',monospace;
+    font-size:16px; color: var(--disabled-text); cursor:pointer; box-shadow:2px 2px 0 var(--ink);
+  }
+  .raredie-icon.locked{ background: var(--disabled-bg); cursor:default; box-shadow:none; border-color: var(--disabled-text); }
+  .raredie-count{
+    position:absolute; bottom:-5px; right:-5px; background:var(--ink); color:#fff; font-size:9px;
+    font-family:'Silkscreen',monospace; font-weight:700; border-radius:50%; width:16px; height:16px;
+    display:flex; align-items:center; justify-content:center; border:2px solid var(--surface);
+  }
+  .raredie-overlay{
+    position:fixed; inset:0; background: rgba(27,27,47,0.78); z-index:260;
+    display:flex; align-items:center; justify-content:center; padding:20px;
+  }
+  .raredie-banner-card{
+    background: var(--ink); color:#fff; border:5px solid; border-radius:14px;
+    padding:28px 24px; max-width:320px; width:100%; text-align:center;
+    box-shadow: 0 0 0 4px rgba(255,255,255,0.1); animation: bannerPop 0.35s ease-out;
+  }
+  .raredie-banner-icon{ width:56px; height:56px; margin:0 auto 16px; border:3px solid #fff; border-radius:10px; }
+  .raredie-banner-name{ font-family:'Press Start 2P',monospace; font-size:15px; margin-bottom:10px; letter-spacing:0.5px; }
+  .raredie-banner-flavor{ font-size:13px; color: rgba(255,255,255,0.8); font-weight:700; }
   @keyframes bannerPop{
     0%{ transform: scale(0.7); opacity:0; }
     60%{ transform: scale(1.08); opacity:1; }
@@ -433,6 +457,8 @@ function newGame(names, variant, usernames){
     name: (n && n.trim()) || `Player ${i+1}`,
     username: (usernames && usernames[i]) ? usernames[i] : null,
     yamsFace: null,
+    earnedRareDice: [],
+    fiveOfAKindCount: 0,
     scores: emptyScores(cats),
   }));
   return {
@@ -456,6 +482,7 @@ function newGame(names, variant, usernames){
     toastAction: null,
     spectatorDiceFlash: null,
     recordHoldersFetched: false,
+    raredieBanner: null,
   };
 }
 
@@ -471,6 +498,88 @@ let loginError = '';
 let loginMode = 'login'; // 'login' | 'signup'
 let loginReturnTo = 'online-menu';
 const VARIANT_KEYS = ['classic','yambs','peril'];
+// --- Rare Dice (achievements) ---
+// To add a new one: add an object here. Nothing else needs to change.
+// trigger:'turn' -> check(ctx) runs right after a hand is scored, ctx = {key,score,dice,held,rerollsLeft,player,filledCountBefore,isLastCategoryForPlayer,variant}
+// trigger:'gameEnd' -> check(player, variant) runs once when the game finishes, against final scores
+const RARE_DICE = [
+  {id:'yams', name:'YAMS', flavor:'Yams!', color:'#FF4B5C', trigger:'turn',
+    check: ctx => ctx.key==='yams' && ctx.score>0},
+  {id:'barack-oyama', name:'Barack Oyama', flavor:'Hit Yams in a single roll', color:'#2FA8E0', trigger:'turn',
+    check: ctx => ctx.key==='yams' && ctx.score>0 && ctx.rerollsLeft===2},
+  {id:'yamwise-gamgee', name:'Yamwise Gamgee', flavor:'Hit a Sequence in a single roll', color:'#3DD68C', trigger:'turn',
+    check: ctx => ctx.key==='sequence' && ctx.score>0 && ctx.rerollsLeft===2},
+  {id:'lebron-yames', name:'LeBron Yames', flavor:'Buzzer beater!', color:'#A66BFF', trigger:'turn',
+    check: ctx => ctx.key==='yams' && ctx.score>0 && ctx.isLastCategoryForPlayer},
+  {id:'snake-eyes', name:'Snake Eyes', flavor:'Hsss...', color:'#5C6B2F', trigger:'turn',
+    check: ctx => ctx.key==='yams' && ctx.score>0 && ctx.dice.every(d=>d===1) && ctx.held.filter(Boolean).length===3},
+  {id:'yammstein', name:'Yammstein', flavor:'Du Hast Mich', color:'#2B2B2B', trigger:'gameEnd', variantScope:'classic',
+    check: (player, variant) => variant==='classic' && player.scores.hi===0 && player.scores.lo===0},
+  {id:'yamibia', name:'Yamibia', flavor:"Once wasn't enough?", color:'#D4A574', trigger:'turn',
+    check: ctx => ctx.dice.every(d=>d===ctx.dice[0]) && ctx.player.fiveOfAKindCount>=2},
+  {id:'yamikaze', name:'Yamikaze', flavor:'What were you thinking?', color:'#FF6B35', trigger:'turn',
+    check: ctx => ctx.key==='yams' && ctx.score===0 && ctx.filledCountBefore===0},
+  {id:'yamine-yamal', name:'Yamine Yamal', flavor:'Bursting onto the scene', color:'#8B2942', trigger:'turn',
+    check: ctx => ctx.key==='yams' && ctx.score>0 && ctx.filledCountBefore===0},
+  {id:'lewis-yamilton', name:'Lewis Yamilton', flavor:"It's Yammertime", color:'#00A19B', trigger:'turn',
+    check: ctx => ctx.key==='fullhouse' && ctx.score>0 && ctx.rerollsLeft===2},
+];
+function checkTurnRareDice(ctx){
+  if(!ctx.player.earnedRareDice) ctx.player.earnedRareDice = [];
+  RARE_DICE.filter(a => a.trigger==='turn').forEach(a => {
+    if(!ctx.player.earnedRareDice.includes(a.id) && a.check(ctx)) ctx.player.earnedRareDice.push(a.id);
+  });
+}
+function checkGameEndRareDice(player, variant){
+  if(!player.earnedRareDice) player.earnedRareDice = [];
+  RARE_DICE.filter(a => a.trigger==='gameEnd').forEach(a => {
+    if(!player.earnedRareDice.includes(a.id) && a.check(player, variant)) player.earnedRareDice.push(a.id);
+  });
+}
+function showRareDieBanner(id){
+  const a = RARE_DICE.find(x => x.id === id);
+  if(!a) return;
+  state.raredieBanner = a;
+  render();
+}
+function renderRareDieBannerOverlay(){
+  if(!state.raredieBanner) return '';
+  const a = state.raredieBanner;
+  return `
+    <div class="raredie-overlay" id="raredieBannerBackdrop">
+      <div class="raredie-banner-card" style="border-color:${a.color};">
+        <div class="raredie-banner-icon" style="background:${a.color};"></div>
+        <div class="raredie-banner-name">${a.name}</div>
+        <div class="raredie-banner-flavor">${a.flavor}</div>
+        <button class="back-link" id="raredieBannerClose" style="margin-top:14px; color:#fff;">Close</button>
+      </div>
+    </div>
+  `;
+}
+function attachRareDieHandlers(){
+  document.querySelectorAll('[data-raredie]').forEach(el => {
+    el.onclick = () => showRareDieBanner(el.getAttribute('data-raredie'));
+  });
+  const closeBtn = document.getElementById('raredieBannerClose');
+  if(closeBtn) closeBtn.onclick = () => { state.raredieBanner = null; render(); };
+  const backdrop = document.getElementById('raredieBannerBackdrop');
+  if(backdrop) backdrop.onclick = (e) => { if(e.target.id === 'raredieBannerBackdrop'){ state.raredieBanner = null; render(); } };
+}
+function renderRareDiceProfileGrid(rareDiceMap){
+  return `<div class="raredie-grid">` + RARE_DICE.map(a => {
+    const count = (rareDiceMap && rareDiceMap[a.id]) || 0;
+    if(count <= 0) return `<div class="raredie-icon locked">?</div>`;
+    return `<div class="raredie-icon" data-raredie="${a.id}" style="background:${a.color};">${count>1?`<span class="raredie-count">${count}</span>`:''}</div>`;
+  }).join('') + `</div>`;
+}
+function renderRareDiceEarnedRow(earnedIds){
+  return `<div class="raredie-grid">` + earnedIds.map(id => {
+    const a = RARE_DICE.find(x => x.id === id);
+    if(!a) return '';
+    return `<div class="raredie-icon" data-raredie="${a.id}" style="background:${a.color};"></div>`;
+  }).join('') + `</div>`;
+}
+
 function emptyStatsBlock(){
   const s = {};
   VARIANT_KEYS.forEach(v => s[v] = {gamesPlayed:0, highestScore:0, totalScore:0, wins:0});
@@ -690,7 +799,7 @@ async function createGame(names_ignored){
       phase: 'lobby',
       variant,
       maxPlayers,
-      players: [{name: myName, username: currentUser.usernameLower, yamsFace: null, scores: emptyScores(cats)}],
+      players: [{name: myName, username: currentUser.usernameLower, yamsFace: null, earnedRareDice: [], fiveOfAKindCount: 0, scores: emptyScores(cats)}],
     });
   } catch(e){
     console.error(e);
@@ -721,7 +830,7 @@ async function joinGame(){
       if(data.phase !== 'lobby') throw new Error('already_started');
       if(data.players.length >= data.maxPlayers) throw new Error('full');
       mySlot = data.players.length;
-      const newPlayers = data.players.concat([{name: myName, username: currentUser.usernameLower, yamsFace: null, scores: emptyScores(catsFor(data.variant))}]);
+      const newPlayers = data.players.concat([{name: myName, username: currentUser.usernameLower, yamsFace: null, earnedRareDice: [], fiveOfAKindCount: 0, scores: emptyScores(catsFor(data.variant))}]);
       const update = { players: newPlayers };
       if(newPlayers.length === data.maxPlayers){
         update.phase = 'playing';
@@ -1340,11 +1449,29 @@ function doRoll(){
 function resolveTurn(key, score){
   if(!isMyTurn()) return;
   const curIdx = state.totalTurnsPlayed % state.players.length;
+  const player = state.players[curIdx];
   const cat = state.cats.find(c => c.key === key);
-  state.players[curIdx].scores[key] = score;
+
+  const filledCountBefore = state.cats.filter(c => player.scores[c.key] !== null).length;
+  const isFiveOfAKind = state.dice.every(d => d === state.dice[0]);
+  if(isFiveOfAKind) player.fiveOfAKindCount = (player.fiveOfAKindCount || 0) + 1;
+
+  player.scores[key] = score;
   if(key === 'yams' && score > 0){
-    state.players[curIdx].yamsFace = state.dice[0];
+    player.yamsFace = state.dice[0];
   }
+
+  checkTurnRareDice({
+    key, score,
+    dice: state.dice.slice(),
+    held: state.held.slice(),
+    rerollsLeft: state.rerollsLeft,
+    player,
+    filledCountBefore,
+    isLastCategoryForPlayer: (filledCountBefore + 1) === state.cats.length,
+    variant: state.variant,
+  });
+
   state.lastAction = {name: state.players[curIdx].name, label: cat.label, score, ts: Date.now()};
   state.shownActionTs = state.lastAction.ts; // don't re-toast our own action when our echo arrives
   state.toastAction = state.lastAction;
@@ -1358,6 +1485,7 @@ function resolveTurn(key, score){
 
   const bothDone = state.players.every(p => state.cats.every(c => p.scores[c.key] !== null));
   if(bothDone){
+    state.players.forEach(p => checkGameEndRareDice(p, state.variant));
     state.phase = 'final';
     if(state.online && state.online.active) autoSaveOnlineHistory();
   }
@@ -1437,6 +1565,16 @@ function renderFinal(){
   }
   // 'skipped' shows nothing further
 
+  const rareDiceSections = state.players
+    .filter(p => p.earnedRareDice && p.earnedRareDice.length > 0)
+    .map(p => `
+      <div style="margin-top:6px;">
+        <p style="font-size:11px; font-weight:700; color:var(--ink-soft); text-transform:uppercase; letter-spacing:1px; margin-bottom:6px;">${p.name}'s Rare Dice</p>
+        ${renderRareDiceEarnedRow(p.earnedRareDice)}
+      </div>`).join('');
+  const rareDiceHtml = rareDiceSections
+    ? `<h2 style="font-size:12px; text-transform:uppercase; letter-spacing:1.5px; color:var(--ink-soft); text-align:left; margin:18px 0 8px;">Rare Dice Earned</h2>${rareDiceSections}`
+    : '';
   return `
     <div class="final">
       <div class="final-card">
@@ -1453,16 +1591,19 @@ function renderFinal(){
         </div>
         ${renderSheet()}
         ${saveBoxHtml}
+        ${rareDiceHtml}
         <div style="margin-top:24px;">
           <button class="restart-btn" id="restartBtn">${state.online && state.online.active ? 'Back to menu' : 'Play again'}</button>
           <div><button class="history-link" id="viewHistoryBtn2">View past games</button></div>
         </div>
       </div>
     </div>
+    ${renderRareDieBannerOverlay()}
   `;
 }
 
 function attachFinalHandlers(){
+  attachRareDieHandlers();
   document.getElementById('restartBtn').onclick = () => {
     if(state.online && state.online.active){
       leaveOnlineFlow();
@@ -1566,6 +1707,8 @@ async function autoSaveOnlineHistory(){
       const ref = fbDb.collection('players').doc(r.username);
       let personalBest = false;
       const isWinner = winnerUsernames.includes(r.username);
+      const playerObj = state.players.find(p => p.username === r.username);
+      const earnedThisGame = (playerObj && playerObj.earnedRareDice) || [];
       try{
         await fbDb.runTransaction(async (tx) => {
           const snap = await tx.get(ref);
@@ -1579,8 +1722,10 @@ async function autoSaveOnlineHistory(){
             totalScore: prev.totalScore + r.score,
             wins: (prev.wins || 0) + (isWinner ? 1 : 0),
           };
-          tx.update(ref, {stats});
-          if(currentUser && currentUser.usernameLower === r.username) currentUser.stats = stats;
+          const rareDice = d.rareDice || {};
+          earnedThisGame.forEach(id => { rareDice[id] = (rareDice[id] || 0) + 1; });
+          tx.update(ref, {stats, rareDice});
+          if(currentUser && currentUser.usernameLower === r.username){ currentUser.stats = stats; currentUser.rareDice = rareDice; }
         });
       } catch(e){ console.error('Stats update failed for', r.username, e); }
       const isAllTimeBest = r.score > currentTop;
@@ -1847,13 +1992,17 @@ function renderProfile(){
           <div class="totalcard"><div class="n">Average</div><div class="v" style="font-size:18px;">${avg}</div></div>
         </div>
         ${h2hHtml}
+        <h2 style="font-size:12px; text-transform:uppercase; letter-spacing:1.5px; color:var(--ink-soft); text-align:left; margin:18px 0 8px;">Rare Dice</h2>
+        ${renderRareDiceProfileGrid(p.rareDice)}
         <h2 style="font-size:12px; text-transform:uppercase; letter-spacing:1.5px; color:var(--ink-soft); text-align:left; margin:18px 0 8px;">Game history</h2>
         ${historyHtml}
       </div>
     </div>
+    ${renderRareDieBannerOverlay()}
   `;
 }
 function attachProfileHandlers(){
+  attachRareDieHandlers();
   document.getElementById('profBackBtn').onclick = () => {
     if(state.profileReturnTo === 'leaderboard') loadLeaderboard('mode-select', state.leaderboardVariant);
     else { state.phase = 'mode-select'; render(); }
