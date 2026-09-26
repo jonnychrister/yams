@@ -1130,7 +1130,7 @@ function renderSetup(){
         <div class="setup-section-label">Players</div>
         <div class="player-count-row">${counts}</div>
         ${inputs}
-        <button class="cta-btn" id="startBtn">Start game</button>
+        <button class="cta-btn" id="startBtn">PRESS START</button>
         <div><button class="history-link" id="viewHistoryBtn">View past games</button></div>
         <div><button class="back-link" id="backToModeBtn" style="margin-top:10px; margin-bottom:0;">&larr; Back</button></div>
       </div>
@@ -1247,9 +1247,9 @@ function renderGame(){
   let rollBtnHtml = '';
   if(canAct){
     if(!state.hasRolledOnce){
-      rollBtnHtml = `<button class="roll-btn" id="rollBtn" ${state.animating?'disabled':''}>Roll all 5 dice</button>`;
+      rollBtnHtml = `<button class="roll-btn" id="rollBtn" ${state.animating?'disabled':''}>Roll 5</button>`;
     } else if(state.rerollsLeft > 0){
-      rollBtnHtml = `<button class="roll-btn" id="rollBtn" ${state.animating?'disabled':''}>Reroll unheld dice</button>
+      rollBtnHtml = `<button class="roll-btn" id="rollBtn" ${state.animating?'disabled':''}>Reroll Unheld Dice</button>
         <div class="reroll-count">${state.rerollsLeft} reroll${state.rerollsLeft===1?'':'s'} left</div>`;
     }
   }
