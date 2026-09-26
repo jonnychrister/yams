@@ -982,8 +982,8 @@ function renderModeSelect(){
         <p class="tagline">ROLL UP</p>
         ${acctLine}
         <p>How are you playing?</p>
-        <button class="cta-btn" id="passPlayBtn" style="margin-bottom:10px;">Pass &amp; Play (same device)</button>
-        <button class="cta-btn" id="playOnlineBtn">Play Online (separate devices)</button>
+        <button class="cta-btn" id="passPlayBtn" style="margin-bottom:10px;">Pass &amp; Play<br>(same device)</button>
+        <button class="cta-btn" id="playOnlineBtn">Play Online<br>(separate devices)</button>
         <div><button class="history-link" id="viewHistoryBtn">View past games</button></div>
         <div><button class="history-link" id="viewLeaderboardBtn">Leaderboard</button></div>
         ${currentUser ? `<div><button class="history-link" id="viewProfileBtn">My profile</button></div>` : ''}
@@ -1130,7 +1130,7 @@ function renderSetup(){
         <div class="setup-section-label">Players</div>
         <div class="player-count-row">${counts}</div>
         ${inputs}
-        <button class="cta-btn" id="startBtn">PRESS START</button>
+        <button class="cta-btn" id="startBtn">Start game</button>
         <div><button class="history-link" id="viewHistoryBtn">View past games</button></div>
         <div><button class="back-link" id="backToModeBtn" style="margin-top:10px; margin-bottom:0;">&larr; Back</button></div>
       </div>
@@ -1247,9 +1247,9 @@ function renderGame(){
   let rollBtnHtml = '';
   if(canAct){
     if(!state.hasRolledOnce){
-      rollBtnHtml = `<button class="roll-btn" id="rollBtn" ${state.animating?'disabled':''}>Roll 5</button>`;
+      rollBtnHtml = `<button class="roll-btn" id="rollBtn" ${state.animating?'disabled':''}>Roll all 5 dice</button>`;
     } else if(state.rerollsLeft > 0){
-      rollBtnHtml = `<button class="roll-btn" id="rollBtn" ${state.animating?'disabled':''}>Reroll Unheld Dice</button>
+      rollBtnHtml = `<button class="roll-btn" id="rollBtn" ${state.animating?'disabled':''}>Reroll unheld dice</button>
         <div class="reroll-count">${state.rerollsLeft} reroll${state.rerollsLeft===1?'':'s'} left</div>`;
     }
   }
