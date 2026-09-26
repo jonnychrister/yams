@@ -152,6 +152,22 @@
   .filled-row{ background: rgba(61,214,140,0.15); border-color: var(--green); box-shadow: 3px 3px 0 var(--green); }
   .filled-row .catscore{ color: var(--green); }
   .filled-row .cpoints{ color: var(--green); font-weight:700; }
+  .foregone-row{ background: rgba(255,75,92,0.12); border-color: var(--red); box-shadow: 3px 3px 0 var(--red); }
+  .foregone-row .catscore{ color: var(--red); }
+  .foregone-row .cpoints{ color: var(--red); font-weight:700; }
+  .yams-face{ font-size:0.6em; vertical-align:super; margin-left:2px; opacity:0.75; }
+  .highscore-banner{
+    margin: 0 0 16px; padding:14px 10px; border:4px solid var(--ink); border-radius:10px;
+    text-align:center; font-family:'Press Start 2P',monospace; letter-spacing:0.5px;
+    animation: bannerPop 0.4s ease-out;
+  }
+  .highscore-banner.personal{ background: var(--blue); color:#fff; font-size:12px; box-shadow:4px 4px 0 var(--ink); }
+  .highscore-banner.alltime{ background: var(--yellow); color:var(--ink); font-size:14px; box-shadow:6px 6px 0 var(--held); }
+  @keyframes bannerPop{
+    0%{ transform: scale(0.7); opacity:0; }
+    60%{ transform: scale(1.08); opacity:1; }
+    100%{ transform: scale(1); }
+  }
 
   .sheet-toggle{ text-align:center; padding: 10px 18px 0; }
   .sheet-toggle button{
@@ -383,11 +399,16 @@ function emptyScores(cats){
   return s;
 }
 
-function newGame(names, variant){
+function newGame(names, variant, usernames){
   names = (names && names.length) ? names : ['Player 1','Player 2'];
   variant = (variant === 'yambs' || variant === 'peril') ? variant : 'classic';
   const cats = catsFor(variant);
-  const players = names.map((n,i) => ({name: (n && n.trim()) || `Player ${i+1}`, scores: emptyScores(cats)}));
+  const players = names.map((n,i) => ({
+    name: (n && n.trim()) || `Player ${i+1}`,
+    username: (usernames && usernames[i]) ? usernames[i] : null,
+    yamsFace: null,
+    scores: emptyScores(cats),
+  }));
   return {
     players,
     variant,
@@ -403,6 +424,7 @@ function newGame(names, variant){
     saveChoice: null, // null | 'choosing' | 'entering' | 'saved' | 'skipped'
     perilDeclared: null, // Peril variant: the hand declared for the current turn
     online: {active: false}, // set when playing an online (cross-device) game
+    historyDocId: null, // set once this game's result has been saved, so location can be patched in later
   };
 }
 
@@ -411,6 +433,31 @@ state.phase = 'mode-select';
 let setupCount = 2;
 let setupVariant = 'classic';
 let onlineError = '';
+
+// --- Login / player accounts ---
+let currentUser = null; // {usernameLower, username, initials, stats} when logged in
+let loginError = '';
+let loginMode = 'login'; // 'login' | 'signup'
+let loginReturnTo = 'online-menu';
+const VARIANT_KEYS = ['classic','yambs','peril'];
+function emptyStatsBlock(){
+  const s = {};
+  VARIANT_KEYS.forEach(v => s[v] = {gamesPlayed:0, highestScore:0, totalScore:0});
+  return s;
+}
+function restoreLogin(){
+  try{
+    const saved = localStorage.getItem('yams_login');
+    if(!saved || !fbAvailable) return;
+    fbDb.collection('players').doc(saved).get().then(doc => {
+      if(doc.exists){
+        const d = doc.data();
+        currentUser = {usernameLower: saved, username: d.username, initials: d.initials, stats: d.stats};
+        render();
+      }
+    }).catch(e => console.error('Restore login failed', e));
+  } catch(e){ /* localStorage unavailable */ }
+}
 
 // --- Firebase (online play) ---
 const firebaseConfig = {
@@ -432,6 +479,79 @@ try{
 } catch(e){
   console.error('Firebase init failed', e);
   fbAvailable = false;
+}
+restoreLogin();
+
+async function signupUser(username, initials, pin){
+  loginError = '';
+  if(!fbAvailable){ loginError = "Can't reach the login service right now."; render(); return; }
+  username = (username||'').trim();
+  initials = (initials||'').trim().toUpperCase();
+  pin = (pin||'').trim().toUpperCase();
+  if(!username){ loginError = 'Enter a username.'; render(); return; }
+  if(initials.length < 2 || initials.length > 3 || !/^[A-Za-z]+$/.test(initials)){ loginError = 'Initials must be 2-3 letters.'; render(); return; }
+  if(!/^[A-Za-z]{5}$/.test(pin)){ loginError = 'PIN must be exactly 5 letters.'; render(); return; }
+  const usernameLower = username.toLowerCase();
+  const ref = fbDb.collection('players').doc(usernameLower);
+  try{
+    await fbDb.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if(snap.exists) throw new Error('taken');
+      tx.set(ref, {
+        username, initials, pin,
+        createdAt: new Date().toISOString(),
+        stats: emptyStatsBlock(),
+      });
+    });
+  } catch(e){
+    loginError = e.message === 'taken' ? 'That username is already taken.' : "Couldn't sign up — try again.";
+    render();
+    return;
+  }
+  currentUser = {usernameLower, username, initials, stats: emptyStatsBlock()};
+  try{ localStorage.setItem('yams_login', usernameLower); } catch(e){}
+  state.phase = loginReturnTo;
+  render();
+}
+
+async function loginUser(username, pin){
+  loginError = '';
+  if(!fbAvailable){ loginError = "Can't reach the login service right now."; render(); return; }
+  const usernameLower = (username||'').trim().toLowerCase();
+  const pinUpper = (pin||'').trim().toUpperCase();
+  if(!usernameLower || !pinUpper){ loginError = 'Enter your username and PIN.'; render(); return; }
+  try{
+    const doc = await fbDb.collection('players').doc(usernameLower).get();
+    if(!doc.exists){ loginError = 'No account with that username.'; render(); return; }
+    const d = doc.data();
+    if((d.pin||'').toUpperCase() !== pinUpper){ loginError = 'Incorrect PIN.'; render(); return; }
+    currentUser = {usernameLower, username: d.username, initials: d.initials, stats: d.stats};
+    try{ localStorage.setItem('yams_login', usernameLower); } catch(e){}
+    state.phase = loginReturnTo;
+    render();
+  } catch(e){
+    console.error(e);
+    loginError = "Couldn't log in — check your connection.";
+    render();
+  }
+}
+
+function logoutUser(){
+  currentUser = null;
+  try{ localStorage.removeItem('yams_login'); } catch(e){}
+  state.phase = 'mode-select';
+  render();
+}
+
+async function getNextGameId(){
+  const ref = fbDb.collection('meta').doc('gameCounter');
+  const next = await fbDb.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    const n = snap.exists ? (snap.data().next || 1) : 1;
+    tx.set(ref, {next: n+1});
+    return n;
+  });
+  return String(next).padStart(6,'0');
 }
 
 function generateRoomCode(){
@@ -481,6 +601,7 @@ function applyRemoteGameData(data){
     state.hasRolledOnce = data.hasRolledOnce;
     state.rerollsLeft = data.rerollsLeft;
     state.perilDeclared = data.perilDeclared;
+    if(data.highScoreFlags) state.highScoreFlags = data.highScoreFlags;
     state.phase = data.phase === 'final' ? 'final' : 'playing';
     render();
   }
@@ -498,7 +619,8 @@ function attachFirestoreListener(gameId){
 async function createGame(names_ignored){
   onlineError = '';
   if(!fbAvailable){ onlineError = "Can't reach the online service right now."; render(); return; }
-  const myName = (document.getElementById('onlineCreateName').value || '').trim() || 'Player 1';
+  if(!currentUser){ state.phase = 'login'; render(); return; }
+  const myName = currentUser.initials;
   const variant = setupVariant;
   const maxPlayers = setupCount;
   const cats = catsFor(variant);
@@ -514,7 +636,7 @@ async function createGame(names_ignored){
       phase: 'lobby',
       variant,
       maxPlayers,
-      players: [{name: myName, scores: emptyScores(cats)}],
+      players: [{name: myName, username: currentUser.usernameLower, yamsFace: null, scores: emptyScores(cats)}],
     });
   } catch(e){
     console.error(e);
@@ -531,8 +653,9 @@ async function createGame(names_ignored){
 async function joinGame(){
   onlineError = '';
   if(!fbAvailable){ onlineError = "Can't reach the online service right now."; render(); return; }
+  if(!currentUser){ state.phase = 'login'; render(); return; }
   const code = ((document.getElementById('onlineJoinCode').value || '').trim().toUpperCase());
-  const myName = (document.getElementById('onlineJoinName').value || '').trim();
+  const myName = currentUser.initials;
   if(!code){ onlineError = "Enter a room code."; render(); return; }
   const ref = fbDb.collection('yamsGames').doc(code);
   let mySlot = -1;
@@ -544,7 +667,7 @@ async function joinGame(){
       if(data.phase !== 'lobby') throw new Error('already_started');
       if(data.players.length >= data.maxPlayers) throw new Error('full');
       mySlot = data.players.length;
-      const newPlayers = data.players.concat([{name: myName || `Player ${mySlot+1}`, scores: emptyScores(catsFor(data.variant))}]);
+      const newPlayers = data.players.concat([{name: myName, username: currentUser.usernameLower, yamsFace: null, scores: emptyScores(catsFor(data.variant))}]);
       const update = { players: newPlayers };
       if(newPlayers.length === data.maxPlayers){
         update.phase = 'playing';
@@ -649,6 +772,9 @@ function numbersTotalOf(scores){
 function render(){
   const app = document.getElementById('app');
   if(state.phase === 'mode-select'){ app.innerHTML = renderModeSelect(); attachModeSelectHandlers(); return; }
+  if(state.phase === 'login'){ app.innerHTML = renderLogin(); attachLoginHandlers(); return; }
+  if(state.phase === 'leaderboard'){ app.innerHTML = renderLeaderboard(); attachLeaderboardHandlers(); return; }
+  if(state.phase === 'profile'){ app.innerHTML = renderProfile(); attachProfileHandlers(); return; }
   if(state.phase === 'online-menu'){ app.innerHTML = renderOnlineMenu(); attachOnlineMenuHandlers(); return; }
   if(state.phase === 'online-lobby'){ app.innerHTML = renderOnlineLobby(); attachOnlineLobbyHandlers(); return; }
   if(state.phase === 'setup'){ app.innerHTML = renderSetup(); attachSetupHandlers(); return; }
@@ -659,23 +785,77 @@ function render(){
 }
 
 function renderModeSelect(){
+  const acctLine = currentUser
+    ? `<p style="font-size:12px; color:var(--ink-soft); margin-top:-8px;">Logged in as ${currentUser.username} (${currentUser.initials}) &middot; <button class="history-link" id="logoutBtn" style="font-size:12px; margin:0; padding:0; display:inline;">Log out</button></p>`
+    : '';
   return `
     <div class="setup">
       <div class="setup-card">
         ${wordmarkHtml('lg')}
         <p class="tagline">ROLL UP</p>
+        ${acctLine}
         <p>How are you playing?</p>
         <button class="cta-btn" id="passPlayBtn" style="margin-bottom:10px;">Pass &amp; Play (same device)</button>
         <button class="cta-btn" id="playOnlineBtn">Play Online (separate devices)</button>
         <div><button class="history-link" id="viewHistoryBtn">View past games</button></div>
+        <div><button class="history-link" id="viewLeaderboardBtn">Leaderboard</button></div>
+        ${currentUser ? `<div><button class="history-link" id="viewProfileBtn">My profile</button></div>` : ''}
       </div>
     </div>
   `;
 }
 function attachModeSelectHandlers(){
   document.getElementById('passPlayBtn').onclick = () => { state.phase = 'setup'; render(); };
-  document.getElementById('playOnlineBtn').onclick = () => { onlineError=''; state.phase = 'online-menu'; render(); };
+  document.getElementById('playOnlineBtn').onclick = () => {
+    onlineError='';
+    if(currentUser){ state.phase = 'online-menu'; }
+    else { loginError=''; loginMode='login'; loginReturnTo='online-menu'; state.phase = 'login'; }
+    render();
+  };
   document.getElementById('viewHistoryBtn').onclick = () => { loadHistory('setup'); };
+  document.getElementById('viewLeaderboardBtn').onclick = () => { loadLeaderboard('mode-select'); };
+  const profileBtn = document.getElementById('viewProfileBtn');
+  if(profileBtn) profileBtn.onclick = () => { loadProfile(currentUser.usernameLower, 'mode-select'); };
+  const logoutBtn = document.getElementById('logoutBtn');
+  if(logoutBtn) logoutBtn.onclick = (e) => { e.preventDefault(); logoutUser(); };
+}
+
+function renderLogin(){
+  const isSignup = loginMode === 'signup';
+  const errorHtml = loginError ? `<p style="color:var(--danger); font-size:13px; font-weight:600; margin:0 0 10px;">${loginError}</p>` : '';
+  return `
+    <div class="setup">
+      <div class="setup-card">
+        ${wordmarkHtml('lg')}
+        <p class="tagline">${isSignup ? 'NEW PLAYER' : 'WELCOME BACK'}</p>
+        <div class="variant-row">
+          <button class="count-btn ${!isSignup?'active':''}" id="loginTabBtn">Log in</button>
+          <button class="count-btn ${isSignup?'active':''}" id="signupTabBtn">Sign up</button>
+        </div>
+        ${errorHtml}
+        <input id="loginUsername" type="text" placeholder="Username" maxlength="20">
+        ${isSignup ? `<input id="loginInitials" type="text" placeholder="Initials (2-3 letters)" maxlength="3">` : ''}
+        <input id="loginPin" type="text" placeholder="${isSignup ? 'Choose a 5-letter PIN' : '5-letter PIN'}" maxlength="5">
+        <button class="cta-btn" id="loginSubmitBtn">${isSignup ? 'Create account' : 'Log in'}</button>
+        <div><button class="back-link" id="loginBackBtn" style="margin-top:14px;">&larr; Back</button></div>
+      </div>
+    </div>
+  `;
+}
+function attachLoginHandlers(){
+  document.getElementById('loginTabBtn').onclick = () => { loginMode='login'; loginError=''; render(); };
+  document.getElementById('signupTabBtn').onclick = () => { loginMode='signup'; loginError=''; render(); };
+  document.getElementById('loginBackBtn').onclick = () => { state.phase = 'mode-select'; render(); };
+  document.getElementById('loginSubmitBtn').onclick = () => {
+    const username = document.getElementById('loginUsername').value;
+    const pin = document.getElementById('loginPin').value;
+    if(loginMode === 'signup'){
+      const initials = document.getElementById('loginInitials').value;
+      signupUser(username, initials, pin);
+    } else {
+      loginUser(username, pin);
+    }
+  };
 }
 
 function renderOnlineMenu(){
@@ -691,6 +871,7 @@ function renderOnlineMenu(){
       <div class="setup-card">
         <button class="back-link" id="backToModeBtn">&larr; Back</button>
         <h1 style="font-size:28px;">Play Online</h1>
+        <p style="font-size:12px; margin-top:-14px;">Playing as ${currentUser.username} (${currentUser.initials})</p>
         ${errorHtml}
         <div class="save-box" style="margin-top:6px;">
           <p style="font-weight:700; color:var(--ink); margin-bottom:10px;">Create a game</p>
@@ -698,13 +879,11 @@ function renderOnlineMenu(){
           <div class="variant-row">${variants}</div>
           <div class="setup-section-label">Players</div>
           <div class="player-count-row">${counts}</div>
-          <input id="onlineCreateName" type="text" placeholder="Your name" maxlength="16">
           <button class="cta-btn" id="createGameBtn">Create game</button>
         </div>
         <div class="save-box">
           <p style="font-weight:700; color:var(--ink); margin-bottom:10px;">Join a game</p>
           <input id="onlineJoinCode" type="text" placeholder="Room code" maxlength="5" style="text-transform:uppercase;">
-          <input id="onlineJoinName" type="text" placeholder="Your name" maxlength="16">
           <button class="cta-btn" id="joinGameBtn">Join game</button>
         </div>
       </div>
@@ -906,10 +1085,12 @@ function renderGame(){
       state.cats.filter(c=>c.group===g).forEach(c => {
         const filled = cur.scores[c.key];
         if(filled !== null){
+          const isForegone = filled === 0;
+          const faceHtml = (c.key==='yams' && cur.yamsFace) ? `<span class="yams-face">(${cur.yamsFace})</span>` : '';
           catlistHtml += `
-            <div class="catrow filled-row">
-              <div><span class="cname">${c.label}</span><span class="cpoints">Filled</span></div>
-              <div class="catscore">${filled}</div>
+            <div class="catrow ${isForegone ? 'foregone-row' : 'filled-row'}">
+              <div><span class="cname">${c.label}</span><span class="cpoints">${isForegone ? 'Foregone' : 'Filled'}</span></div>
+              <div class="catscore">${filled}${faceHtml}</div>
             </div>`;
         } else if(!canAct){
           const qualifies = catQualifies(c.key, state.dice, cur.scores);
@@ -965,7 +1146,8 @@ function renderSheet(){
   let rows = state.cats.map(c => {
     const cells = state.players.map(p => {
       const v = p.scores[c.key];
-      return `<td class="${v===null?'empty':''}">${v===null?'-':v}</td>`;
+      const faceHtml = (c.key==='yams' && v>0 && p.yamsFace) ? `<span class="yams-face">(${p.yamsFace})</span>` : '';
+      return `<td class="${v===null?'empty':''}">${v===null?'-':v}${faceHtml}</td>`;
     }).join('');
     return `<tr><td title="${c.label}">${c.abbr}</td>${cells}</tr>`;
   }).join('');
@@ -1100,6 +1282,9 @@ function resolveTurn(key, score){
   if(!isMyTurn()) return;
   const curIdx = state.totalTurnsPlayed % state.players.length;
   state.players[curIdx].scores[key] = score;
+  if(key === 'yams' && score > 0){
+    state.players[curIdx].yamsFace = state.dice[0];
+  }
   state.totalTurnsPlayed += 1;
   state.dice = [1,1,1,1,1];
   state.held = [false,false,false,false,false];
@@ -1137,8 +1322,20 @@ function renderFinal(){
   const bonusLine = results.map(r => `${r.name} ${r.bonusActive ? '+'+r.bonusAmount : 'none'}`).join(' &middot; ');
 
   let saveBoxHtml = '';
+  let bannerHtml = '';
   if(state.online && state.online.active){
-    saveBoxHtml = `<div class="save-box"><p class="save-status">This result was saved automatically.</p></div>`;
+    saveBoxHtml = `
+      <div class="save-box">
+        <p class="save-status">This result was saved automatically.</p>
+        <input id="onlineLocationInput" type="text" placeholder="Where was this played? (optional)" maxlength="40" style="margin-top:8px;">
+      </div>`;
+    const myPlayer = state.players[state.online.mySlot];
+    const flags = (myPlayer && myPlayer.username && state.highScoreFlags) ? state.highScoreFlags[myPlayer.username] : null;
+    if(flags && flags.allTimeBest){
+      bannerHtml = `<div class="highscore-banner alltime">&#9733; NEW ALL-TIME HIGH SCORE! &#9733;</div>`;
+    } else if(flags && flags.personalBest){
+      bannerHtml = `<div class="highscore-banner personal">NEW PERSONAL BEST!</div>`;
+    }
   } else if(!state.saveChoice){
     saveBoxHtml = `
       <div class="save-box">
@@ -1169,6 +1366,7 @@ function renderFinal(){
       <div class="final-card">
         <h1>GAME OVER</h1>
         <p style="margin-top:-6px; color:var(--ink-soft); font-size:12px; text-transform:uppercase; letter-spacing:1px;">${state.variant === 'yambs' ? 'Yambs' : state.variant === 'peril' ? 'Peril' : 'Classic'}</p>
+        ${bannerHtml}
         <div class="winner">${winnerText}</div>
         <div class="totals">
           ${totalsHtml}
@@ -1211,6 +1409,11 @@ function attachFinalHandlers(){
   };
   const retryBtn = document.getElementById('retrySaveBtn');
   if(retryBtn) retryBtn.onclick = () => { state.saveChoice = 'entering'; render(); };
+  const onlineLoc = document.getElementById('onlineLocationInput');
+  if(onlineLoc) onlineLoc.onblur = () => {
+    const val = onlineLoc.value.trim();
+    if(val) patchHistoryLocation(val);
+  };
 }
 
 async function saveGameToHistory(location){
@@ -1226,7 +1429,8 @@ async function saveGameToHistory(location){
     const maxTotal = Math.max(...results.map(r => r.score));
     const winners = results.filter(r => r.score === maxTotal).map(r => r.name);
     const winner = winners.length === results.length ? 'Tie' : winners.join(' & ');
-    await fbDb.collection('yamsHistory').add({
+    const docId = await getNextGameId();
+    await fbDb.collection('yamsHistory').doc(docId).set({
       date: new Date().toISOString(),
       location: location || '',
       variant: state.variant,
@@ -1242,22 +1446,65 @@ async function saveGameToHistory(location){
   render();
 }
 
+async function patchHistoryLocation(location){
+  if(!fbAvailable || !state.historyDocId || !location) return;
+  try{
+    await fbDb.collection('yamsHistory').doc(state.historyDocId).update({location});
+  } catch(e){ console.error('Location patch failed', e); }
+}
+
 async function autoSaveOnlineHistory(){
   if(!fbAvailable) return;
   try{
-    const results = state.players.map(p => ({name: p.name, score: computeTotal(p.scores)}));
+    const results = state.players.map(p => ({name: p.name, username: p.username || null, score: computeTotal(p.scores)}));
     const maxTotal = Math.max(...results.map(r => r.score));
     const winners = results.filter(r => r.score === maxTotal).map(r => r.name);
     const winner = winners.length === results.length ? 'Tie' : winners.join(' & ');
-    await fbDb.collection('yamsHistory').add({
+    const usernames = results.map(r => r.username).filter(Boolean);
+    const docId = await getNextGameId();
+    await fbDb.collection('yamsHistory').doc(docId).set({
       date: new Date().toISOString(),
       location: '',
       variant: state.variant,
       mode: 'online',
       gameId: state.online.gameId,
       players: results,
+      usernames,
       winner,
     });
+    state.historyDocId = docId;
+
+    let currentTop = 0;
+    try{
+      const topSnap = await fbDb.collection('players').orderBy(`stats.${state.variant}.highestScore`,'desc').limit(1).get();
+      if(!topSnap.empty) currentTop = (topSnap.docs[0].data().stats[state.variant]||{}).highestScore || 0;
+    } catch(e){ console.error('Leaderboard check failed', e); }
+
+    state.highScoreFlags = {};
+    for(const r of results){
+      if(!r.username) continue;
+      const ref = fbDb.collection('players').doc(r.username);
+      let personalBest = false;
+      try{
+        await fbDb.runTransaction(async (tx) => {
+          const snap = await tx.get(ref);
+          const d = snap.exists ? snap.data() : {};
+          const stats = d.stats || emptyStatsBlock();
+          const prev = stats[state.variant] || {gamesPlayed:0, highestScore:0, totalScore:0};
+          if(r.score > prev.highestScore) personalBest = true;
+          stats[state.variant] = {
+            gamesPlayed: prev.gamesPlayed + 1,
+            highestScore: Math.max(prev.highestScore, r.score),
+            totalScore: prev.totalScore + r.score,
+          };
+          tx.update(ref, {stats});
+          if(currentUser && currentUser.usernameLower === r.username) currentUser.stats = stats;
+        });
+      } catch(e){ console.error('Stats update failed for', r.username, e); }
+      state.highScoreFlags[r.username] = {personalBest, allTimeBest: r.score > currentTop};
+    }
+    fbDb.collection('yamsGames').doc(state.online.gameId).update({highScoreFlags: state.highScoreFlags}).catch(e => console.error('Flag sync failed', e));
+    render();
   } catch(e){
     console.error('Auto-save failed', e);
   }
@@ -1325,6 +1572,176 @@ function attachHistoryHandlers(){
     state.phase = state.historyReturnTo === 'final' ? 'final' : 'setup';
     render();
   };
+}
+
+// --- Leaderboard ---
+async function loadLeaderboard(returnTo, variant){
+  state.leaderboardReturnTo = returnTo;
+  state.leaderboardVariant = variant || state.leaderboardVariant || 'classic';
+  state.leaderboardList = null;
+  state.leaderboardError = null;
+  state.phase = 'leaderboard';
+  render();
+  if(!fbAvailable){
+    state.leaderboardList = [];
+    state.leaderboardError = "Couldn't load the leaderboard — check your connection.";
+    render();
+    return;
+  }
+  try{
+    const snap = await fbDb.collection('players')
+      .orderBy(`stats.${state.leaderboardVariant}.highestScore`,'desc')
+      .limit(50).get();
+    state.leaderboardList = snap.docs
+      .map(d => ({usernameLower: d.id, ...d.data()}))
+      .filter(p => p.stats && p.stats[state.leaderboardVariant] && p.stats[state.leaderboardVariant].gamesPlayed > 0);
+  } catch(e){
+    console.error('Leaderboard load failed', e);
+    state.leaderboardList = [];
+    state.leaderboardError = "Couldn't load the leaderboard — check your connection.";
+  }
+  render();
+}
+
+function renderLeaderboard(){
+  const variants = [
+    {key:'classic', label:'Classic'},
+    {key:'yambs', label:'Yambs'},
+    {key:'peril', label:'Peril'},
+  ].map(v => `<button class="count-btn ${state.leaderboardVariant===v.key?'active':''}" data-lbvariant="${v.key}">${v.label}</button>`).join('');
+  let listHtml;
+  if(state.leaderboardError){
+    listHtml = `<p class="save-status">${state.leaderboardError}</p>`;
+  } else if(state.leaderboardList === null){
+    listHtml = `<p class="save-status">Loading…</p>`;
+  } else if(state.leaderboardList.length === 0){
+    listHtml = `<p class="save-status">No games played in this variant yet.</p>`;
+  } else {
+    listHtml = state.leaderboardList.map((p,i) => {
+      const s = p.stats[state.leaderboardVariant];
+      return `
+        <div class="hist-row" data-viewprofile="${p.usernameLower}" style="cursor:pointer;">
+          <div class="hist-top"><span>#${i+1} ${p.username} (${p.initials})</span><span>${s.highestScore}</span></div>
+          <div class="hist-meta">${s.gamesPlayed} game${s.gamesPlayed===1?'':'s'} played</div>
+        </div>`;
+    }).join('');
+  }
+  return `
+    <div class="final">
+      <div class="final-card">
+        <button class="back-link" id="lbBackBtn">&larr; Back</button>
+        <h1 style="font-size:22px;">Leaderboard</h1>
+        <div class="variant-row" style="margin-top:14px;">${variants}</div>
+        ${listHtml}
+      </div>
+    </div>
+  `;
+}
+function attachLeaderboardHandlers(){
+  document.getElementById('lbBackBtn').onclick = () => {
+    state.phase = state.leaderboardReturnTo === 'final' ? 'final' : 'mode-select';
+    render();
+  };
+  document.querySelectorAll('[data-lbvariant]').forEach(el => {
+    el.onclick = () => loadLeaderboard(state.leaderboardReturnTo, el.getAttribute('data-lbvariant'));
+  });
+  document.querySelectorAll('[data-viewprofile]').forEach(el => {
+    el.onclick = () => loadProfile(el.getAttribute('data-viewprofile'), 'leaderboard');
+  });
+}
+
+// --- Profile ---
+async function loadProfile(usernameLower, returnTo, variant){
+  state.profileReturnTo = returnTo;
+  state.profileVariant = variant || state.profileVariant || 'classic';
+  state.profileUser = null;
+  state.profileHistory = null;
+  state.profileError = null;
+  state.phase = 'profile';
+  render();
+  if(!fbAvailable){
+    state.profileError = "Couldn't load this profile — check your connection.";
+    render();
+    return;
+  }
+  try{
+    const doc = await fbDb.collection('players').doc(usernameLower).get();
+    if(!doc.exists){ state.profileError = 'No such player.'; render(); return; }
+    state.profileUser = {usernameLower, ...doc.data()};
+    const histSnap = await fbDb.collection('yamsHistory')
+      .where('usernames','array-contains', usernameLower)
+      .orderBy('date','desc').limit(30).get();
+    state.profileHistory = histSnap.docs.map(d => d.data());
+  } catch(e){
+    console.error('Profile load failed', e);
+    state.profileError = "Couldn't load this profile — check your connection.";
+  }
+  render();
+}
+
+function renderProfile(){
+  if(state.profileError){
+    return `
+      <div class="final"><div class="final-card">
+        <button class="back-link" id="profBackBtn">&larr; Back</button>
+        <p class="save-status">${state.profileError}</p>
+      </div></div>`;
+  }
+  if(!state.profileUser){
+    return `
+      <div class="final"><div class="final-card">
+        <button class="back-link" id="profBackBtn">&larr; Back</button>
+        <p class="save-status">Loading…</p>
+      </div></div>`;
+  }
+  const p = state.profileUser;
+  const isSelf = currentUser && currentUser.usernameLower === p.usernameLower;
+  const variants = [
+    {key:'classic', label:'Classic'},
+    {key:'yambs', label:'Yambs'},
+    {key:'peril', label:'Peril'},
+  ].map(v => `<button class="count-btn ${state.profileVariant===v.key?'active':''}" data-profvariant="${v.key}">${v.label}</button>`).join('');
+  const s = (p.stats && p.stats[state.profileVariant]) || {gamesPlayed:0, highestScore:0, totalScore:0};
+  const avg = s.gamesPlayed > 0 ? Math.round(s.totalScore / s.gamesPlayed) : 0;
+  const historyHtml = (state.profileHistory && state.profileHistory.length > 0)
+    ? state.profileHistory.map(r => {
+        const d = new Date(r.date);
+        const dateStr = isNaN(d) ? '' : d.toLocaleDateString(undefined, {day:'numeric', month:'short', year:'numeric'});
+        const mine = (r.players||[]).find(pl => pl.username === p.usernameLower);
+        const variantTag = r.variant === 'yambs' ? 'Yambs' : r.variant === 'peril' ? 'Peril' : 'Classic';
+        return `
+          <div class="hist-row">
+            <div class="hist-top"><span>${mine ? mine.score : '—'} pts</span><span>${r.winner===p.username ? 'Won' : (r.winner==='Tie'?'Tied':'Lost')}</span></div>
+            <div class="hist-meta">${variantTag} &middot; ${dateStr}${r.location ? ' &middot; ' + r.location : ''}</div>
+          </div>`;
+      }).join('')
+    : `<p class="save-status">No online games recorded yet.</p>`;
+  return `
+    <div class="final">
+      <div class="final-card">
+        <button class="back-link" id="profBackBtn">&larr; Back</button>
+        <h1 style="font-size:22px;">${p.username}</h1>
+        <p style="margin-top:-8px; color:var(--ink-soft); font-size:12px;">${p.initials}${isSelf ? ' &middot; this is you' : ''}</p>
+        <div class="variant-row" style="margin-top:14px;">${variants}</div>
+        <div class="totals" style="margin-top:6px;">
+          <div class="totalcard"><div class="n">Played</div><div class="v" style="font-size:18px;">${s.gamesPlayed}</div></div>
+          <div class="totalcard"><div class="n">Highest</div><div class="v" style="font-size:18px;">${s.highestScore}</div></div>
+          <div class="totalcard"><div class="n">Average</div><div class="v" style="font-size:18px;">${avg}</div></div>
+        </div>
+        <h2 style="font-size:12px; text-transform:uppercase; letter-spacing:1.5px; color:var(--ink-soft); text-align:left; margin:18px 0 8px;">Game history</h2>
+        ${historyHtml}
+      </div>
+    </div>
+  `;
+}
+function attachProfileHandlers(){
+  document.getElementById('profBackBtn').onclick = () => {
+    if(state.profileReturnTo === 'leaderboard') loadLeaderboard('mode-select', state.leaderboardVariant);
+    else { state.phase = 'mode-select'; render(); }
+  };
+  document.querySelectorAll('[data-profvariant]').forEach(el => {
+    el.onclick = () => { state.profileVariant = el.getAttribute('data-profvariant'); render(); };
+  });
 }
 
 render();
