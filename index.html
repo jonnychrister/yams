@@ -652,6 +652,45 @@ try{
 }
 restoreLogin();
 
+// TEMPORARY - visual QA only, remove after use
+async function seedYamsyDummy(){
+  if(!fbAvailable){ document.body.innerHTML = '<p style="padding:40px;font-family:sans-serif;">Firebase not available.</p>'; return; }
+  const stats = {
+    classic: {gamesPlayed: 24, highestScore: 268, totalScore: 4512, wins: 14},
+    yambs:   {gamesPlayed: 15, highestScore: 301, totalScore: 3165, wins: 7},
+    peril:   {gamesPlayed: 9,  highestScore: 344, totalScore: 1863, wins: 5},
+  };
+  const rareDice = {
+    'yams':12, 'barack-oyama':3, 'yamwise-gamgee':2, 'lebron-yames':1, 'snake-eyes':1,
+    'yammstein':4, 'yamibia':2, 'yamikaze':1, 'yamine-yamal':1, 'lewis-yamilton':5,
+    'gordon-yamsay':6, 'jean-claude-van-yamme':2, 'yamesses-ii':1, 'yameron-diaz':1, 'yameela-yamil':3,
+  };
+  try{
+    await fbDb.collection('players').doc('yamsy').set({
+      username: 'YAMSY', initials: 'YMS', pin: 'DUMMY',
+      createdAt: new Date().toISOString(),
+      stats, rareDice,
+    });
+    document.body.innerHTML = '<div style="padding:40px;font-family:sans-serif;text-align:center;"><h2>YAMSY created</h2><p>View it from the Leaderboard (tap into it) - no need to log in as it.</p></div>';
+  } catch(e){
+    document.body.innerHTML = '<pre style="padding:20px;">'+e+'</pre>';
+  }
+}
+async function deleteYamsyDummy(){
+  if(!fbAvailable){ document.body.innerHTML = '<p style="padding:40px;font-family:sans-serif;">Firebase not available.</p>'; return; }
+  try{
+    await fbDb.collection('players').doc('yamsy').delete();
+    document.body.innerHTML = '<div style="padding:40px;font-family:sans-serif;text-align:center;"><h2>YAMSY deleted</h2></div>';
+  } catch(e){
+    document.body.innerHTML = '<pre style="padding:20px;">'+e+'</pre>';
+  }
+}
+(function(){
+  const p = new URLSearchParams(location.search).get('admin');
+  if(p === 'seedyamsy') seedYamsyDummy();
+  if(p === 'deleteyamsy') deleteYamsyDummy();
+})();
+
 async function signupUser(username, initials, pin){
   loginError = '';
   if(!fbAvailable){ loginError = "Can't reach the login service right now."; render(); return; }
