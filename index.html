@@ -155,6 +155,10 @@
   .foregone-row{ background: rgba(255,75,92,0.12); border-color: var(--red); box-shadow: 3px 3px 0 var(--red); }
   .foregone-row .catscore{ color: var(--red); }
   .foregone-row .cpoints{ color: var(--red); font-weight:700; }
+  .void-row{ background: rgba(107,107,128,0.1); border-color: var(--ink-soft); box-shadow: 3px 3px 0 var(--ink-soft); }
+  .void-row .catscore{ color: var(--ink-soft); }
+  .void-row .cpoints{ color: var(--ink-soft); font-weight:700; }
+  .voided-score{ text-decoration: line-through; }
   .yams-face{ font-size:0.6em; vertical-align:super; margin-left:2px; opacity:0.75; }
   .crown-icon{ vertical-align:middle; margin-right:3px; position:relative; top:-1px; }
   .highscore-banner{
@@ -172,6 +176,8 @@
     font-size:16px; color: var(--disabled-text); cursor:pointer; box-shadow:2px 2px 0 var(--ink);
   }
   .raredie-icon.locked{ background: var(--disabled-bg); cursor:default; box-shadow:none; border-color: var(--disabled-text); }
+  .raredie-pips{ display:grid; grid-template-columns:repeat(3,1fr); grid-template-rows:repeat(3,1fr); gap:2px; width:26px; height:26px; }
+  .raredie-pips .pip{ width:5px; height:5px; }
   .raredie-count{
     position:absolute; bottom:-5px; right:-5px; background:var(--ink); color:#fff; font-size:9px;
     font-family:'Silkscreen',monospace; font-weight:700; border-radius:50%; width:16px; height:16px;
@@ -514,11 +520,11 @@ const RARE_DICE = [
   {id:'snake-eyes', name:'Snake Eyes', flavor:'Hsss...', color:'#5C6B2F', trigger:'turn',
     check: ctx => ctx.key==='yams' && ctx.score>0 && ctx.dice.every(d=>d===1) && ctx.held.filter(Boolean).length===3},
   {id:'yammstein', name:'Yammstein', flavor:'Du Hast Mich', color:'#2B2B2B', trigger:'gameEnd', variantScope:'classic',
-    check: (player, variant) => variant==='classic' && player.scores.hi===0 && player.scores.lo===0},
+    check: (player, variant) => variant==='classic' && !(player.scores.hi>0 && player.scores.lo>0)},
   {id:'yamibia', name:'Yamibia', flavor:"Once wasn't enough?", color:'#D4A574', trigger:'turn',
     check: ctx => ctx.dice.every(d=>d===ctx.dice[0]) && ctx.player.fiveOfAKindCount>=2},
   {id:'yamikaze', name:'Yamikaze', flavor:'What were you thinking?', color:'#FF6B35', trigger:'turn',
-    check: ctx => ctx.key==='yams' && ctx.score===0 && ctx.filledCountBefore===0},
+    check: ctx => ctx.dice.every(d=>d===ctx.dice[0]) && ctx.player.scores.yams === 0},
   {id:'yamine-yamal', name:'Yamine Yamal', flavor:'Bursting onto the scene', color:'#8B2942', trigger:'turn',
     check: ctx => ctx.key==='yams' && ctx.score>0 && ctx.filledCountBefore===0},
   {id:'lewis-yamilton', name:'Lewis Yamilton', flavor:"It's Yammertime", color:'#00A19B', trigger:'turn',
@@ -565,18 +571,23 @@ function attachRareDieHandlers(){
   const backdrop = document.getElementById('raredieBannerBackdrop');
   if(backdrop) backdrop.onclick = (e) => { if(e.target.id === 'raredieBannerBackdrop'){ state.raredieBanner = null; render(); } };
 }
+function pipCountFor(id){
+  let sum = 0;
+  for(let i=0;i<id.length;i++) sum += id.charCodeAt(i);
+  return (sum % 6) + 1;
+}
 function renderRareDiceProfileGrid(rareDiceMap){
   return `<div class="raredie-grid">` + RARE_DICE.map(a => {
     const count = (rareDiceMap && rareDiceMap[a.id]) || 0;
     if(count <= 0) return `<div class="raredie-icon locked">?</div>`;
-    return `<div class="raredie-icon" data-raredie="${a.id}" style="background:${a.color};">${count>1?`<span class="raredie-count">${count}</span>`:''}</div>`;
+    return `<div class="raredie-icon" data-raredie="${a.id}" style="background:${a.color};"><div class="raredie-pips">${pipsFor(pipCountFor(a.id))}</div>${count>1?`<span class="raredie-count">${count}</span>`:''}</div>`;
   }).join('') + `</div>`;
 }
 function renderRareDiceEarnedRow(earnedIds){
   return `<div class="raredie-grid">` + earnedIds.map(id => {
     const a = RARE_DICE.find(x => x.id === id);
     if(!a) return '';
-    return `<div class="raredie-icon" data-raredie="${a.id}" style="background:${a.color};"></div>`;
+    return `<div class="raredie-icon" data-raredie="${a.id}" style="background:${a.color};"><div class="raredie-pips">${pipsFor(pipCountFor(a.id))}</div></div>`;
   }).join('') + `</div>`;
 }
 
@@ -916,6 +927,9 @@ function catScore(key, dice){
   return c[face] * face;
 }
 
+function hiLoVoided(scores){
+  return scores.hi !== null && scores.lo !== null && !(scores.hi > 0 && scores.lo > 0);
+}
 function computeTotal(scores){
   const usesHiLo = state.variant === 'classic' || state.variant === 'peril';
   let base = 0;
@@ -923,7 +937,7 @@ function computeTotal(scores){
   let hiloScore = 0;
   if(usesHiLo){
     const hi = scores.hi, lo = scores.lo;
-    if(hi !== null && lo !== null) hiloScore = hi + lo;
+    if(hi > 0 && lo > 0) hiloScore = hi + lo;
   }
   const bonus = bonusFor(scores).amount;
   return base + hiloScore + bonus;
@@ -1254,11 +1268,15 @@ function renderGame(){
         const filled = cur.scores[c.key];
         if(filled !== null){
           const isForegone = filled === 0;
+          const isVoided = (c.key==='hi' || c.key==='lo') && !isForegone && hiLoVoided(cur.scores);
           const faceHtml = (c.key==='yams' && cur.yamsFace) ? `<span class="yams-face">(${cur.yamsFace})</span>` : '';
+          const rowClass = isVoided ? 'void-row' : (isForegone ? 'foregone-row' : 'filled-row');
+          const label = isVoided ? 'Voided' : (isForegone ? 'Foregone' : 'Filled');
+          const scoreHtml = isVoided ? `<span class="voided-score">${filled}</span>` : filled;
           catlistHtml += `
-            <div class="catrow ${isForegone ? 'foregone-row' : 'filled-row'}">
-              <div><span class="cname">${c.label}</span><span class="cpoints">${isForegone ? 'Foregone' : 'Filled'}</span></div>
-              <div class="catscore">${filled}${faceHtml}</div>
+            <div class="catrow ${rowClass}">
+              <div><span class="cname">${c.label}</span><span class="cpoints">${label}</span></div>
+              <div class="catscore">${scoreHtml}${faceHtml}</div>
             </div>`;
         } else if(!canAct){
           const qualifies = catQualifies(c.key, state.dice, cur.scores);
@@ -1315,7 +1333,9 @@ function renderSheet(){
     const cells = state.players.map(p => {
       const v = p.scores[c.key];
       const faceHtml = (c.key==='yams' && v>0 && p.yamsFace) ? `<span class="yams-face">(${p.yamsFace})</span>` : '';
-      return `<td class="${v===null?'empty':''}">${v===null?'-':v}${faceHtml}</td>`;
+      const voided = (c.key==='hi' || c.key==='lo') && hiLoVoided(p.scores);
+      const displayVal = v===null ? '-' : v;
+      return `<td class="${v===null?'empty':''}">${voided ? `<span class="voided-score">${displayVal}</span>` : displayVal}${faceHtml}</td>`;
     }).join('');
     return `<tr><td title="${c.label}">${c.abbr}</td>${cells}</tr>`;
   }).join('');
