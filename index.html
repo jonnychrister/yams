@@ -168,6 +168,15 @@
     60%{ transform: scale(1.08); opacity:1; }
     100%{ transform: scale(1); }
   }
+  .action-toast{
+    margin: 10px 18px 0; padding:10px 14px; border:3px solid var(--ink); border-radius:8px;
+    background: var(--purple); color:#fff; font-weight:700; font-size:13px; text-align:center;
+    box-shadow: 3px 3px 0 var(--ink); animation: toastSlide 0.25s ease-out;
+  }
+  @keyframes toastSlide{
+    0%{ transform: translateY(-10px); opacity:0; }
+    100%{ transform: translateY(0); opacity:1; }
+  }
 
   .sheet-toggle{ text-align:center; padding: 10px 18px 0; }
   .sheet-toggle button{
@@ -425,6 +434,10 @@ function newGame(names, variant, usernames){
     perilDeclared: null, // Peril variant: the hand declared for the current turn
     online: {active: false}, // set when playing an online (cross-device) game
     historyDocId: null, // set once this game's result has been saved, so location can be patched in later
+    lastAction: null,
+    shownActionTs: null,
+    toastAction: null,
+    spectatorDiceFlash: null,
   };
 }
 
@@ -577,6 +590,7 @@ function syncToFirestore(){
     hasRolledOnce: state.hasRolledOnce,
     rerollsLeft: state.rerollsLeft,
     perilDeclared: state.perilDeclared,
+    lastAction: state.lastAction || null,
     phase: state.phase === 'final' ? 'final' : 'playing',
   }).catch(e => console.error('Sync failed', e));
 }
@@ -592,17 +606,26 @@ function applyRemoteGameData(data){
     return;
   }
   if(data.phase === 'playing' || data.phase === 'final'){
+    if(state.animating) return; // don't let a stray echo interrupt an in-flight local roll animation
+    const wasSpectating = !isMyTurn();
+    const oldDice = state.dice;
     state.variant = data.variant;
     state.cats = catsFor(data.variant);
     state.players = data.players;
     state.totalTurnsPlayed = data.totalTurnsPlayed;
     state.dice = data.dice;
+    state.spectatorDiceFlash = (wasSpectating && oldDice) ? data.dice.map((v,i) => v !== oldDice[i]) : null;
     state.held = data.held || [false,false,false,false,false];
     state.hasRolledOnce = data.hasRolledOnce;
     state.rerollsLeft = data.rerollsLeft;
     state.perilDeclared = data.perilDeclared;
     if(data.highScoreFlags) state.highScoreFlags = data.highScoreFlags;
     state.phase = data.phase === 'final' ? 'final' : 'playing';
+    if(data.lastAction && data.lastAction.ts !== state.shownActionTs){
+      state.shownActionTs = data.lastAction.ts;
+      state.toastAction = data.lastAction;
+      setTimeout(() => { state.toastAction = null; render(); }, 3000);
+    }
     render();
   }
 }
@@ -1002,6 +1025,9 @@ function renderGame(){
           <div class="pfilled">${state.cats.filter(c=>p.scores[c.key]!==null).length}/${state.cats.length} filled</div>
         </div>`).join('');
 
+  const toastHtml = state.toastAction
+    ? `<div class="action-toast">${state.toastAction.name} took ${state.toastAction.label} — ${state.toastAction.score}</div>`
+    : '';
   const topAndSheet = (bodyHtml, bannerHtml) => `
     <div class="topbar">
       ${wordmarkHtml('sm')}
@@ -1009,6 +1035,7 @@ function renderGame(){
         ${pillsHtml}
       </div>
     </div>
+    ${toastHtml}
     <div class="turn-banner">${bannerHtml}</div>
     ${bodyHtml}
     <div class="sheet-toggle"><button id="sheetBtn">${state.showSheet ? 'Hide full scoresheet' : 'View full scoresheet'}</button></div>
@@ -1045,11 +1072,12 @@ function renderGame(){
       <div class="hint">${canAct ? 'Tap roll to start your turn' : `Waiting for ${cur.name} to roll&hellip;`}</div>`;
   } else {
     diceHtml = `<div class="dice-row">` + state.dice.map((d,i)=>`
-        <div class="die ${state.held[i]?'held':''}" data-die="${i}" style="background:${DICE_COLORS[i]};">
+        <div class="die ${state.held[i]?'held':''} ${state.spectatorDiceFlash && state.spectatorDiceFlash[i] ? 'settle':''}" data-die="${i}" style="background:${DICE_COLORS[i]};">
           ${state.held[i] ? '<div class="held-tag">HELD</div>' : ''}
           ${pipsFor(d)}
         </div>`).join('') + `</div>
       <div class="hint">${!canAct ? `Waiting for ${cur.name}&hellip;` : state.rerollsLeft>0 ? 'Tap dice to hold them, then reroll the rest' : (isPeril ? 'No rerolls left' : 'No rerolls left — choose a hand below')}</div>`;
+    state.spectatorDiceFlash = null;
   }
 
   let rollBtnHtml = '';
@@ -1281,10 +1309,15 @@ function doRoll(){
 function resolveTurn(key, score){
   if(!isMyTurn()) return;
   const curIdx = state.totalTurnsPlayed % state.players.length;
+  const cat = state.cats.find(c => c.key === key);
   state.players[curIdx].scores[key] = score;
   if(key === 'yams' && score > 0){
     state.players[curIdx].yamsFace = state.dice[0];
   }
+  state.lastAction = {name: state.players[curIdx].name, label: cat.label, score, ts: Date.now()};
+  state.shownActionTs = state.lastAction.ts; // don't re-toast our own action when our echo arrives
+  state.toastAction = state.lastAction;
+  setTimeout(() => { state.toastAction = null; render(); }, 3000);
   state.totalTurnsPlayed += 1;
   state.dice = [1,1,1,1,1];
   state.held = [false,false,false,false,false];
@@ -1670,8 +1703,10 @@ async function loadProfile(usernameLower, returnTo, variant){
     state.profileUser = {usernameLower, ...doc.data()};
     const histSnap = await fbDb.collection('yamsHistory')
       .where('usernames','array-contains', usernameLower)
-      .orderBy('date','desc').limit(30).get();
-    state.profileHistory = histSnap.docs.map(d => d.data());
+      .limit(100).get();
+    state.profileHistory = histSnap.docs.map(d => d.data())
+      .sort((a,b) => new Date(b.date) - new Date(a.date))
+      .slice(0, 30);
   } catch(e){
     console.error('Profile load failed', e);
     state.profileError = "Couldn't load this profile — check your connection.";
