@@ -156,6 +156,7 @@
   .foregone-row .catscore{ color: var(--red); }
   .foregone-row .cpoints{ color: var(--red); font-weight:700; }
   .yams-face{ font-size:0.6em; vertical-align:super; margin-left:2px; opacity:0.75; }
+  .crown-icon{ vertical-align:middle; margin-right:3px; position:relative; top:-1px; }
   .highscore-banner{
     margin: 0 0 16px; padding:14px 10px; border:4px solid var(--ink); border-radius:10px;
     text-align:center; font-family:'Press Start 2P',monospace; letter-spacing:0.5px;
@@ -163,6 +164,7 @@
   }
   .highscore-banner.personal{ background: var(--blue); color:#fff; font-size:12px; box-shadow:4px 4px 0 var(--ink); }
   .highscore-banner.alltime{ background: var(--yellow); color:var(--ink); font-size:14px; box-shadow:6px 6px 0 var(--held); }
+  .highscore-banner.bigplay{ background: var(--purple); color:#fff; font-size:12px; box-shadow:4px 4px 0 var(--ink); }
   @keyframes bannerPop{
     0%{ transform: scale(0.7); opacity:0; }
     60%{ transform: scale(1.08); opacity:1; }
@@ -389,6 +391,9 @@ function wordmarkHtml(size){
     letters.map(l => `<span style="color:${l.color};">${l.ch}</span>`).join('') +
     `</div>`;
 }
+function crownIcon(){
+  return `<svg class="crown-icon" viewBox="0 0 16 12" width="14" height="11" xmlns="http://www.w3.org/2000/svg"><path d="M1 4L4 7L8 1L12 7L15 4L14 11H2L1 4Z" fill="#FFC93C" stroke="#1B1B2F" stroke-width="1" stroke-linejoin="round"/></svg>`;
+}
 function bonusRulesFor(variant){
   if(variant === 'yambs') return {threshold:63, value:35};
   if(variant === 'peril') return {threshold:30, value:null}; // Peril's bonus amount is dynamic, see bonusFor
@@ -438,6 +443,7 @@ function newGame(names, variant, usernames){
     shownActionTs: null,
     toastAction: null,
     spectatorDiceFlash: null,
+    recordHoldersFetched: false,
   };
 }
 
@@ -457,6 +463,15 @@ function emptyStatsBlock(){
   const s = {};
   VARIANT_KEYS.forEach(v => s[v] = {gamesPlayed:0, highestScore:0, totalScore:0, wins:0});
   return s;
+}
+let recordHolders = {classic:null, yambs:null, peril:null};
+async function fetchRecordHolders(){
+  if(!fbAvailable) return;
+  try{
+    const doc = await fbDb.collection('meta').doc('records').get();
+    if(doc.exists) recordHolders = Object.assign({classic:null, yambs:null, peril:null}, doc.data());
+    render();
+  } catch(e){ console.error('Record holder fetch failed', e); }
 }
 function restoreLogin(){
   try{
@@ -599,6 +614,10 @@ function applyRemoteGameData(data){
   if(!data) return;
   state.online.maxPlayers = data.maxPlayers;
   state.online.lobbyPlayers = (data.players || []).map(p => p.name);
+  if(!state.recordHoldersFetched){
+    state.recordHoldersFetched = true;
+    fetchRecordHolders();
+  }
 
   if(data.phase === 'lobby'){
     if(state.phase !== 'online-lobby') state.phase = 'online-lobby';
@@ -1020,7 +1039,7 @@ function renderGame(){
 
   const pillsHtml = state.players.map((p,i) => `
         <div class="scorepill ${curIdx===i?'active':''}">
-          <div class="pname">${p.name}${online && i===state.online.mySlot ? ' (you)' : ''}</div>
+          <div class="pname">${p.username && recordHolders[state.variant]===p.username ? crownIcon() : ''}${p.name}${online && i===state.online.mySlot ? ' (you)' : ''}</div>
           <div class="ptotal">${computeTotal(p.scores)}</div>
           <div class="pfilled">${state.cats.filter(c=>p.scores[c.key]!==null).length}/${state.cats.length} filled</div>
         </div>`).join('');
@@ -1335,6 +1354,18 @@ function resolveTurn(key, score){
 }
 
 function renderFinal(){
+  let bigPlay = null;
+  state.players.forEach(p => {
+    state.cats.forEach(c => {
+      const v = p.scores[c.key];
+      if(v && v > 0 && (!bigPlay || v > bigPlay.score)){
+        bigPlay = {name: p.name, label: c.label, score: v, key: c.key, face: p.yamsFace};
+      }
+    });
+  });
+  const bigPlayHtml = bigPlay
+    ? `<div class="highscore-banner bigplay">BIG PLAY: ${bigPlay.name}'s ${bigPlay.label} — ${bigPlay.score}${bigPlay.key==='yams' && bigPlay.face ? ` (${bigPlay.face})` : ''}</div>`
+    : '';
   const results = state.players.map(p => {
     const b = bonusFor(p.scores);
     return {
@@ -1399,6 +1430,7 @@ function renderFinal(){
       <div class="final-card">
         <h1>GAME OVER</h1>
         <p style="margin-top:-6px; color:var(--ink-soft); font-size:12px; text-transform:uppercase; letter-spacing:1px;">${state.variant === 'yambs' ? 'Yambs' : state.variant === 'peril' ? 'Peril' : 'Classic'}</p>
+        ${bigPlayHtml}
         ${bannerHtml}
         <div class="winner">${winnerText}</div>
         <div class="totals">
@@ -1539,7 +1571,12 @@ async function autoSaveOnlineHistory(){
           if(currentUser && currentUser.usernameLower === r.username) currentUser.stats = stats;
         });
       } catch(e){ console.error('Stats update failed for', r.username, e); }
-      state.highScoreFlags[r.username] = {personalBest, allTimeBest: r.score > currentTop};
+      const isAllTimeBest = r.score > currentTop;
+      state.highScoreFlags[r.username] = {personalBest, allTimeBest: isAllTimeBest};
+      if(isAllTimeBest){
+        currentTop = r.score; // so a later player in the same game can't also claim it at a lower score
+        fbDb.collection('meta').doc('records').set({[state.variant]: r.username}, {merge:true}).catch(e => console.error('Record holder update failed', e));
+      }
     }
     fbDb.collection('yamsGames').doc(state.online.gameId).update({highScoreFlags: state.highScoreFlags}).catch(e => console.error('Flag sync failed', e));
     render();
@@ -1659,7 +1696,7 @@ function renderLeaderboard(){
       const s = p.stats[state.leaderboardVariant];
       return `
         <div class="hist-row" data-viewprofile="${p.usernameLower}" style="cursor:pointer;">
-          <div class="hist-top"><span>#${i+1} ${p.username} (${p.initials})</span><span>${s.highestScore}</span></div>
+          <div class="hist-top"><span>#${i+1} ${i===0?crownIcon():''}${p.username} (${p.initials})</span><span>${s.highestScore}</span></div>
           <div class="hist-meta">${s.gamesPlayed} game${s.gamesPlayed===1?'':'s'} played</div>
         </div>`;
     }).join('');
@@ -1709,9 +1746,10 @@ async function loadProfile(usernameLower, returnTo, variant){
     const histSnap = await fbDb.collection('yamsHistory')
       .where('usernames','array-contains', usernameLower)
       .limit(100).get();
-    state.profileHistory = histSnap.docs.map(d => d.data())
-      .sort((a,b) => new Date(b.date) - new Date(a.date))
-      .slice(0, 30);
+    const fullHistory = histSnap.docs.map(d => d.data()).sort((a,b) => new Date(b.date) - new Date(a.date));
+    state.profileFullHistory = fullHistory;
+    state.profileHistory = fullHistory.slice(0, 30);
+    fetchRecordHolders();
   } catch(e){
     console.error('Profile load failed', e);
     state.profileError = "Couldn't load this profile — check your connection.";
@@ -1758,11 +1796,36 @@ function renderProfile(){
           </div>`;
       }).join('')
     : `<p class="save-status">No online games recorded yet.</p>`;
+  let h2hHtml = '';
+  if(!isSelf && currentUser && state.profileFullHistory){
+    const relevant = state.profileFullHistory.filter(r =>
+      r.variant === state.profileVariant &&
+      (r.usernames||[]).includes(currentUser.usernameLower) &&
+      (r.usernames||[]).includes(p.usernameLower)
+    );
+    let myWins=0, theirWins=0, ties=0;
+    relevant.forEach(r => {
+      const mine = (r.players||[]).find(pl => pl.username === currentUser.usernameLower);
+      const theirs = (r.players||[]).find(pl => pl.username === p.usernameLower);
+      if(mine && theirs){
+        if(mine.score > theirs.score) myWins++;
+        else if(theirs.score > mine.score) theirWins++;
+        else ties++;
+      }
+    });
+    h2hHtml = relevant.length > 0
+      ? `<div class="save-box" style="text-align:center;">
+           <p style="font-weight:700; color:var(--ink); margin-bottom:4px;">Head to head vs you</p>
+           <p style="font-size:20px; font-weight:700; color:var(--ink); margin:0;">${myWins} - ${theirWins}${ties>0 ? ' - '+ties+' tied' : ''}</p>
+         </div>`
+      : `<div class="save-box" style="text-align:center;"><p style="font-size:13px; color:var(--ink-soft); margin:0;">No head-to-head games yet in this variant.</p></div>`;
+  }
+  const holdsCrown = p.username && recordHolders[state.profileVariant] === p.usernameLower;
   return `
     <div class="final">
       <div class="final-card">
         <button class="back-link" id="profBackBtn">&larr; Back</button>
-        <h1 style="font-size:22px;">${p.username}</h1>
+        <h1 style="font-size:22px;">${holdsCrown?crownIcon()+' ':''}${p.username}</h1>
         <p style="margin-top:-8px; color:var(--ink-soft); font-size:12px;">${p.initials}${isSelf ? ' &middot; this is you' : ''}</p>
         <div class="variant-row" style="margin-top:14px;">${variants}</div>
         <div class="totals" style="margin-top:6px;">
@@ -1771,6 +1834,7 @@ function renderProfile(){
           <div class="totalcard"><div class="n">Highest</div><div class="v" style="font-size:18px;">${s.highestScore}</div></div>
           <div class="totalcard"><div class="n">Average</div><div class="v" style="font-size:18px;">${avg}</div></div>
         </div>
+        ${h2hHtml}
         <h2 style="font-size:12px; text-transform:uppercase; letter-spacing:1.5px; color:var(--ink-soft); text-align:left; margin:18px 0 8px;">Game history</h2>
         ${historyHtml}
       </div>
