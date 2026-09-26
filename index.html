@@ -1,1 +1,1333 @@
-Coming soon
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Yams">
+<meta name="theme-color" content="#FBF8F2">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Silkscreen:wght@400;700&display=swap" rel="stylesheet">
+<title>Yams</title>
+<style>
+  :root{
+    --ink: #1B1B2F;
+    --ink-soft: #6B6B80;
+    --bg: #FBF8F2;
+    --surface: #FFFFFF;
+    --surface-2: #F2EEDD;
+    --red: #FF4B5C;
+    --yellow: #FFC93C;
+    --green: #3DD68C;
+    --blue: #2FA8E0;
+    --purple: #A66BFF;
+    --danger: #FF4B5C;
+    --held: #FF3E9E;
+    --disabled-bg: #E7E3D3;
+    --disabled-text: #A9A594;
+    --pip: var(--ink);
+  }
+  *{box-sizing:border-box;}
+  html,body{
+    margin:0; padding:0; background:var(--bg); color:var(--ink);
+    font-family: 'Silkscreen', monospace;
+    min-height:100vh;
+    overflow-x:hidden;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .wrap{ max-width:480px; margin:0 auto; padding:0 0 40px; }
+
+  .wordmark{ display:flex; justify-content:center; gap:2px; }
+  .wordmark span{ font-family:'Press Start 2P', monospace; }
+  .wordmark-lg span{ font-size:34px; text-shadow:3px 3px 0 var(--ink); }
+  .wordmark-sm span{ font-size:20px; text-shadow:2px 2px 0 var(--ink); }
+
+  .tagline{ font-family:'Press Start 2P', monospace; font-size:13px; letter-spacing:2px; color: var(--ink); margin:14px 0 20px; }
+
+  .topbar{
+    background: var(--surface);
+    padding: 14px 18px 12px;
+    position: sticky; top:0; z-index:10;
+    border-bottom: 5px solid var(--ink);
+  }
+  .scorepill-row{ display:flex; gap:8px; margin-top:10px; flex-wrap:wrap; }
+  .scorepill{
+    flex:1 1 40%; min-width:100px; background: var(--surface); border:3px solid var(--ink);
+    border-radius:8px; padding:8px 10px; box-shadow: 3px 3px 0 var(--ink);
+  }
+  .scorepill.active{ box-shadow: 4px 4px 0 var(--yellow); }
+  .scorepill .pname{ font-size:11px; color: var(--ink); opacity:0.6; text-transform:uppercase; letter-spacing:1px; font-weight:700; }
+  .scorepill .ptotal{ font-family:'Press Start 2P',monospace; font-size:17px; color: var(--ink); margin:4px 0; }
+  .scorepill .pfilled{ font-size:10px; color: var(--blue); font-weight:700; }
+
+  .turn-banner{
+    text-align:center; padding:16px 18px 4px;
+    font-size:13px; letter-spacing:1px; text-transform:uppercase; color: var(--ink-soft); font-weight:700;
+  }
+  .turn-banner b{ color: var(--purple); }
+
+  .stage{ padding: 8px 18px 4px; }
+
+  .dice-row{
+    display:flex; justify-content:center; gap:10px; padding: 22px 0 10px; flex-wrap:wrap;
+  }
+  .die{
+    width:58px; height:58px; border-radius:9px; background: var(--surface);
+    border: 4px solid var(--ink);
+    display:grid; grid-template-columns: repeat(3,1fr); grid-template-rows: repeat(3,1fr);
+    gap:2px; padding:8px; box-shadow: 4px 4px 0 var(--ink);
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+    position: relative;
+  }
+  .die.held{
+    transform: translateY(-9px);
+    box-shadow: 6px 8px 0 var(--ink);
+  }
+  .die.held::before, .die.held::after{
+    content:''; position:absolute; width:14px; height:14px; border:4px solid var(--held);
+  }
+  .die.held::before{ top:-9px; left:-9px; border-right:none; border-bottom:none; }
+  .die.held::after{ bottom:-9px; right:-9px; border-left:none; border-top:none; }
+  .pip{ width:10px; height:10px; border-radius:2px; background: var(--pip); align-self:center; justify-self:center; }
+  .held-tag{
+    position:absolute; top:-16px; left:50%; transform:translateX(-50%);
+    background: var(--held); color: var(--ink); font-family:'Silkscreen',monospace; font-size:9px; font-weight:700;
+    padding:2px 7px; border-radius:5px; letter-spacing:0.5px; border:2px solid var(--ink); white-space:nowrap; z-index:3;
+  }
+  @keyframes tumble {
+    0% { transform: rotate(0deg) scale(1); }
+    30% { transform: rotate(-16deg) scale(1.1); }
+    60% { transform: rotate(13deg) scale(1.06); }
+    100% { transform: rotate(0deg) scale(1); }
+  }
+  .die.rolling{ animation: tumble 0.42s ease-in-out infinite; }
+  @keyframes settleBounce {
+    0% { transform: scale(1.22) rotate(0deg); }
+    55% { transform: scale(0.92) rotate(-4deg); }
+    100% { transform: scale(1) rotate(0deg); }
+  }
+  .die.settle{ animation: settleBounce 0.28s ease-out; }
+
+  .hint{ text-align:center; color: var(--ink-soft); font-size:12px; margin: 2px 0 14px; font-weight:700; }
+
+  .roll-btn{
+    display:block; width:100%; padding:16px; border:4px solid var(--ink); border-radius:10px;
+    background: var(--yellow); color: var(--ink); font-family:'Press Start 2P',monospace; font-size:13px;
+    letter-spacing:1px; text-transform:uppercase; cursor:pointer; box-shadow: 5px 5px 0 var(--ink);
+  }
+  .roll-btn:active{ transform: translate(2px,2px); box-shadow:3px 3px 0 var(--ink); }
+  .roll-btn:disabled{ background: var(--disabled-bg); color: var(--disabled-text); border-color:var(--disabled-text); box-shadow:none; cursor:default; }
+  .reroll-count{ text-align:center; color: var(--ink-soft); font-size:12px; margin: 10px 0 2px; font-weight:700; }
+
+  .catlist{ padding: 6px 18px 20px; }
+  .catlist h2{
+    color: var(--ink-soft); font-size:12px; text-transform:uppercase; letter-spacing:1.5px;
+    font-weight:700; margin: 18px 0 8px; border-top:2px solid rgba(27,27,47,0.12); padding-top:14px;
+  }
+  .catlist h2:first-child{ border-top:none; padding-top:0; margin-top:4px;}
+  .catrow{
+    background: var(--surface); border:3px solid var(--ink); border-radius:8px; padding:10px 12px; margin-bottom:10px;
+    display:flex; align-items:center; justify-content:space-between; gap:10px; box-shadow: 3px 3px 0 var(--ink);
+  }
+  .catrow .cname{ font-weight:700; font-size:14px; color: var(--ink); }
+  .catrow .cpoints{ font-size:11px; color: var(--ink-soft); display:block; }
+  .catrow .cactions{ display:flex; align-items:center; gap:8px; }
+  .catscore{ font-family:'Press Start 2P',monospace; font-size:14px; color: var(--red); min-width:30px; text-align:right; }
+  .catscore.dash{ color:#C9C4B0; }
+  .take-btn{
+    background: var(--green); color: var(--ink); border:3px solid var(--ink); border-radius:7px;
+    padding:9px 12px; font-family:'Silkscreen',monospace; font-size:12px; font-weight:700; letter-spacing:0.5px; cursor:pointer;
+    box-shadow: 3px 3px 0 var(--ink);
+  }
+  .take-btn:disabled{ background: var(--disabled-bg); color: var(--disabled-text); border-color:var(--disabled-text); box-shadow:none; }
+  .zero-link{
+    background:none; border:none; color: var(--ink-soft); font-size:11px; text-decoration:underline;
+    padding:6px 2px; cursor:pointer; font-family:'Silkscreen',monospace;
+  }
+
+  .locked-row{ opacity:0.55; }
+  .locked-row .catscore{ color: var(--ink-soft); }
+  .filled-row{ background: rgba(61,214,140,0.15); border-color: var(--green); box-shadow: 3px 3px 0 var(--green); }
+  .filled-row .catscore{ color: var(--green); }
+  .filled-row .cpoints{ color: var(--green); font-weight:700; }
+
+  .sheet-toggle{ text-align:center; padding: 10px 18px 0; }
+  .sheet-toggle button{
+    background:none; border:2px solid var(--ink-soft); color: var(--ink-soft);
+    border-radius:20px; padding:8px 16px; font-size:12px; letter-spacing:0.5px; cursor:pointer; font-family:'Silkscreen',monospace;
+  }
+
+  .sheet{ padding: 10px 18px 24px; overflow-x:auto; }
+  table.full{ width:100%; min-width:280px; table-layout:fixed; border-collapse:collapse; background:var(--surface); border:3px solid var(--ink); border-radius:8px; overflow:hidden; }
+  table.full th, table.full td{ padding:8px 6px; font-size:12px; text-align:right; }
+  table.full th:first-child, table.full td:first-child{ text-align:left; width:40px; }
+  table.full thead th{ background: var(--yellow); font-weight:700; color: var(--ink); }
+  table.full tbody tr:nth-child(even){ background: rgba(27,27,47,0.05); }
+  table.full td.empty{ color:#C9C4B0; }
+  table.full tfoot td{ font-weight:700; border-top:3px solid var(--ink); color: var(--ink); }
+
+  .final{ padding: 30px 18px; text-align:center; }
+  .final-card{ background: var(--surface); border:4px solid var(--ink); border-radius:14px; padding:26px 20px; box-shadow: 6px 6px 0 var(--ink); }
+  .final h1{ font-family: 'Press Start 2P', monospace; letter-spacing:1px; color: var(--ink); font-size:20px; margin-bottom:6px; text-shadow: 3px 3px 0 var(--yellow); }
+  .final .winner{ font-size:18px; margin: 12px 0 20px; color: var(--ink); font-weight:700; }
+  .final .totals{ display:flex; gap:14px; justify-content:center; margin-bottom: 24px; flex-wrap:wrap; }
+  .final .totalcard{ background: var(--surface); border:3px solid var(--ink); border-radius:10px; padding:14px 18px; box-shadow: 3px 3px 0 var(--ink); }
+  .final .totalcard .n{ font-size:11px; color: var(--ink-soft); font-weight:700; text-transform:uppercase; }
+  .final .totalcard .v{ font-family:'Press Start 2P',monospace; font-size:22px; color: var(--ink); margin-top:4px; }
+  .final .bonusline{ font-size:12px; color: var(--ink-soft); margin: -14px 0 20px; font-weight:700; }
+  .restart-btn{
+    background: var(--blue); color: var(--ink); border:4px solid var(--ink); border-radius:10px;
+    padding:14px 22px; font-family:'Press Start 2P',monospace; font-size:12px; letter-spacing:1px; cursor:pointer;
+    box-shadow: 5px 5px 0 var(--ink);
+  }
+  .restart-btn:active{ transform: translate(2px,2px); box-shadow:3px 3px 0 var(--ink); }
+  .save-box{ background: var(--surface-2); border:2px solid rgba(27,27,47,0.15); border-radius:10px; padding:16px; margin: 18px 0; text-align:left; }
+  .save-box p{ margin:0 0 10px; font-size:13px; color: var(--ink-soft); }
+  .save-row{ display:flex; gap:8px; }
+  .save-row button{ flex:1; padding:11px; border-radius:8px; font-weight:700; font-size:13px; cursor:pointer; font-family:'Silkscreen',monospace; }
+  .save-yes{ background: var(--green); color: var(--ink); border:3px solid var(--ink); box-shadow:3px 3px 0 var(--ink); }
+  .save-no{ background: transparent; border:2px solid var(--ink-soft) !important; color: var(--ink-soft); }
+  .save-box input{
+    width:100%; padding:10px 12px; border-radius:7px; border:2px solid var(--ink);
+    background:#fff; color:var(--ink); font-size:14px; margin-bottom:10px; font-family:'Silkscreen',monospace;
+  }
+  .save-confirm-btn{ width:100%; background: var(--green); color: var(--ink); border:3px solid var(--ink); border-radius:8px; padding:11px; font-weight:700; cursor:pointer; box-shadow:3px 3px 0 var(--ink); font-family:'Silkscreen',monospace; }
+  .save-status{ font-size:13px; color: var(--ink-soft); font-weight:700; }
+  .history-link{ background:none; border:none; color: var(--ink-soft); text-decoration:underline; font-size:13px; cursor:pointer; margin-top:6px; font-family:'Silkscreen',monospace; }
+  .hist-row{ background: var(--surface-2); border:2px solid rgba(27,27,47,0.15); border-radius:10px; padding:12px 14px; margin-bottom:8px; text-align:left; }
+  .hist-row .hist-top{ display:flex; justify-content:space-between; font-weight:700; font-size:14px; color: var(--ink); }
+  .hist-row .hist-meta{ font-size:12px; color: var(--ink-soft); margin-top:3px; }
+  .back-link{ background:none; border:none; color: var(--ink-soft); text-decoration:underline; font-size:13px; cursor:pointer; margin-bottom:14px; font-family:'Silkscreen',monospace; }
+  .setup{ padding: 60px 18px; text-align:center; }
+  .setup-card{ background: var(--surface); border:4px solid var(--ink); border-radius:16px; padding:32px 22px; box-shadow: 7px 7px 0 var(--ink); }
+  .setup p{ color: var(--ink-soft); font-size:14px; margin-bottom:22px; font-weight:700; }
+  .setup input{
+    width:100%; padding:12px 14px; border-radius:7px; border:2px solid var(--ink);
+    background: #fff; color: var(--ink); font-size:15px; margin-bottom:12px; font-family:'Silkscreen',monospace;
+  }
+  .setup input::placeholder{ color: #A9A594; }
+  .setup-section-label{ text-align:left; font-size:11px; text-transform:uppercase; letter-spacing:1px; color: var(--ink-soft); font-weight:700; margin: 4px 0 6px; }
+  .player-count-row{ display:flex; gap:8px; margin-bottom:14px; }
+  .variant-row{ display:flex; gap:8px; margin-bottom:18px; }
+  .count-btn{
+    flex:1; min-width:0; padding:8px 2px; border-radius:8px; border:3px solid var(--ink);
+    background:#fff; color: var(--ink); font-weight:700; font-size:11px; cursor:pointer; font-family:'Silkscreen',monospace;
+    -webkit-appearance:none; appearance:none; box-shadow: 3px 3px 0 var(--ink);
+    white-space:normal; overflow-wrap:break-word; text-align:center; position:relative;
+  }
+  .count-btn.active::before, .count-btn.active::after{
+    content:''; position:absolute; width:12px; height:12px; border:3px solid var(--held);
+  }
+  .count-btn.active::before{ top:-6px; left:-6px; border-right:none; border-bottom:none; }
+  .count-btn.active::after{ bottom:-6px; right:-6px; border-left:none; border-top:none; }
+  .cta-btn{
+    width:100%; padding:14px; border:4px solid var(--ink); border-radius:10px; background: var(--yellow);
+    color: var(--ink); font-family:'Press Start 2P',monospace; font-size:12px; letter-spacing:1px; cursor:pointer; margin-top:8px;
+    box-shadow: 5px 5px 0 var(--ink);
+  }
+  .cta-btn:active{ transform: translate(2px,2px); box-shadow:3px 3px 0 var(--ink); }
+
+  .howto-fab{
+    position:fixed; top:14px; right:14px; z-index:100;
+    width:36px; height:36px; border-radius:50%; background: var(--yellow); color: var(--ink);
+    border:3px solid var(--ink); font-family:'Press Start 2P',monospace; font-size:14px; cursor:pointer;
+    box-shadow: 3px 3px 0 var(--ink);
+  }
+  .howto-overlay{
+    position:fixed; inset:0; background: rgba(27,27,47,0.6); z-index:200;
+    display:flex; align-items:flex-start; justify-content:center;
+    padding: 50px 16px 30px; overflow-y:auto;
+  }
+  .howto-overlay.hidden{ display:none; }
+  .howto-card{
+    background: var(--surface); color: var(--ink); border:4px solid var(--ink); border-radius:14px;
+    padding: 26px 22px 30px; max-width:460px; width:100%; position:relative; text-align:left;
+    box-shadow: 6px 6px 0 var(--ink);
+  }
+  .howto-card h2{ font-family: 'Press Start 2P', monospace; color: var(--ink); margin:0 0 4px; font-size:18px; text-shadow: 2px 2px 0 var(--yellow); }
+  .howto-card h3{ font-size:12px; text-transform:uppercase; letter-spacing:1px; color: var(--ink-soft); margin:18px 0 8px; font-weight:700; }
+  .howto-card p{ font-size:14px; line-height:1.5; margin: 6px 0; }
+  .howto-card ol, .howto-card ul{ padding-left:20px; margin:4px 0 10px; }
+  .howto-card li{ font-size:14px; line-height:1.5; margin-bottom:4px; }
+  .howto-card strong{ color: var(--ink); }
+  .howto-close{
+    position:absolute; top:14px; right:14px; background:none; border:none;
+    font-size:22px; line-height:1; color: var(--ink-soft); cursor:pointer; padding:4px;
+  }
+</style>
+</head>
+<body>
+<button class="howto-fab" id="howToBtn" aria-label="How to play">?</button>
+<div class="howto-overlay hidden" id="howToModal">
+  <div class="howto-card">
+    <button class="howto-close" id="howToClose" aria-label="Close">&times;</button>
+    <h2>How to Play</h2>
+    <p>Yams is a dice game for 2–4 players. Each turn, you're trying to score as highly as possible in one of the game's hands.</p>
+
+    <h3>Your turn</h3>
+    <ol>
+      <li>Roll all 5 dice.</li>
+      <li>You get 2 rerolls. Each time, choose any of the 5 dice to hold and reroll the rest — or don't reroll at all if you're happy.</li>
+      <li>After your final roll, choose one open hand to score into. It only counts if your dice qualify.</li>
+      <li>If your roll doesn't get you what you wanted, you can <strong>forego</strong> a hand instead and take 0 for it — useful if you were chasing something better on a later turn.</li>
+    </ol>
+    <p>Every turn fills one hand, whether that's a real score or a forced zero. The game ends once everyone has filled every hand on their sheet.</p>
+
+    <h3>Special hands</h3>
+    <ul>
+      <li><strong>Yams</strong> (40 pts) — all 5 dice show the same number</li>
+      <li><strong>Sequence</strong> (30 pts) — five in a row: 1-2-3-4-5 or 2-3-4-5-6</li>
+      <li><strong>Full house</strong> (20 pts) — three of one number and two of another</li>
+      <li><strong>Hi</strong> — score the sum of your dice, aiming as high as possible</li>
+      <li><strong>Lo</strong> — score the sum of your dice, but it must be lower than your Hi. You need both a Hi and a Lo filled or neither counts. Whichever one you fill first sets the limit for the other.</li>
+    </ul>
+
+    <h3>Numbers (Ones through Sixes)</h3>
+    <p>Score = the sum of the dice showing that number. E.g. three 6s scores 18. You need at least one die of that number to use it.</p>
+    <p>In Classic, a Numbers total of 60 or more earns a <strong>+30 bonus</strong>.</p>
+
+    <h3>Variants</h3>
+    <p>The above describes <strong>Classic</strong>. Two variants change things up:</p>
+    <p><strong>Yambs</strong> uses the same core idea with a different hand set:</p>
+    <ul>
+      <li>Hi and Lo are replaced by a single <strong>Chance</strong> hand — the sum of all 5 dice, always available</li>
+      <li><strong>3 of a kind</strong> — sum of all 5 dice, if at least 3 match</li>
+      <li><strong>Gulley</strong> — sum of all 5 dice, if at least 4 match</li>
+      <li><strong>Small straight</strong> — any 4 dice in a row (1-2-3-4, 2-3-4-5 or 3-4-5-6); worth 10, 14 or 18 accordingly</li>
+      <li><strong>Yams</strong> is worth 40 plus the number it's rolled on — a Yams of 6s scores 46</li>
+      <li>The Numbers bonus needs 63+ and is worth <strong>+35</strong> instead of +30</li>
+    </ul>
+    <p><strong>Peril</strong> uses the exact same hands as Classic, but with two twists: before you roll, you must declare which hand you're going for — if your final dice don't qualify for it, you score 0 and your turn ends immediately, with no switching to a different hand. Peril's Numbers bonus also works differently: any Numbers total of 30 or more earns a bonus equal to that total itself — e.g. a Numbers score of 32 adds another 32 points.</p>
+
+    <h3>Tips</h3>
+    <ul>
+      <li>You don't have to declare what you're chasing before you roll — you can change your mind with every reroll.</li>
+      <li>Sometimes the smart play is foregoing a low-value hand to protect your numbers bonus, rather than forcing a bad score into it.</li>
+    </ul>
+  </div>
+</div>
+<div class="wrap" id="app"></div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script>
+document.getElementById('howToBtn').onclick = () => {
+  document.getElementById('howToModal').classList.remove('hidden');
+};
+document.getElementById('howToClose').onclick = () => {
+  document.getElementById('howToModal').classList.add('hidden');
+};
+document.getElementById('howToModal').onclick = (e) => {
+  if(e.target.id === 'howToModal') e.currentTarget.classList.add('hidden');
+};
+const CATS_CLASSIC = [
+  {key:'yams', label:'Yams', abbr:'Y!', points:'40 pts', group:'Special hands'},
+  {key:'sequence', label:'Sequence', abbr:'SQ', points:'30 pts', group:'Special hands'},
+  {key:'fullhouse', label:'Full house', abbr:'FH', points:'20 pts', group:'Special hands'},
+  {key:'hi', label:'Hi', abbr:'HI', points:'sum, as high as possible', group:'Special hands'},
+  {key:'lo', label:'Lo', abbr:'LO', points:'sum, below your Hi', group:'Special hands'},
+  {key:'ones', label:'Ones', abbr:'1', points:'sum of 1s', group:'Numbers'},
+  {key:'twos', label:'Twos', abbr:'2', points:'sum of 2s', group:'Numbers'},
+  {key:'threes', label:'Threes', abbr:'3', points:'sum of 3s', group:'Numbers'},
+  {key:'fours', label:'Fours', abbr:'4', points:'sum of 4s', group:'Numbers'},
+  {key:'fives', label:'Fives', abbr:'5', points:'sum of 5s', group:'Numbers'},
+  {key:'sixes', label:'Sixes', abbr:'6', points:'sum of 6s', group:'Numbers'},
+];
+const CATS_YAMBS = [
+  {key:'yams', label:'Yams', abbr:'Y!', points:'40 + number rolled', group:'Special hands'},
+  {key:'sequence', label:'Sequence', abbr:'SQ', points:'30 pts', group:'Special hands'},
+  {key:'fullhouse', label:'Full house', abbr:'FH', points:'20 pts', group:'Special hands'},
+  {key:'threeofkind', label:'3 of a kind', abbr:'3K', points:'sum of all 5 dice', group:'Special hands'},
+  {key:'gulley', label:'Gulley', abbr:'GU', points:'sum of all 5 dice', group:'Special hands'},
+  {key:'smallstraight', label:'Small straight', abbr:'SS', points:'10 / 14 / 18', group:'Special hands'},
+  {key:'chance', label:'Chance', abbr:'CH', points:'sum of all 5 dice', group:'Special hands'},
+  {key:'ones', label:'Ones', abbr:'1', points:'sum of 1s', group:'Numbers'},
+  {key:'twos', label:'Twos', abbr:'2', points:'sum of 2s', group:'Numbers'},
+  {key:'threes', label:'Threes', abbr:'3', points:'sum of 3s', group:'Numbers'},
+  {key:'fours', label:'Fours', abbr:'4', points:'sum of 4s', group:'Numbers'},
+  {key:'fives', label:'Fives', abbr:'5', points:'sum of 5s', group:'Numbers'},
+  {key:'sixes', label:'Sixes', points:'sum of 6s', group:'Numbers'},
+];
+const FACE_MAP = {ones:1, twos:2, threes:3, fours:4, fives:5, sixes:6};
+const NUM_KEYS = ['ones','twos','threes','fours','fives','sixes'];
+function catsFor(variant){ return variant === 'yambs' ? CATS_YAMBS : CATS_CLASSIC; }
+function wordmarkHtml(size){
+  const letters = [
+    {ch:'Y', color:'#FF4B5C'},
+    {ch:'A', color:'#2FA8E0'},
+    {ch:'M', color:'#FFC93C'},
+    {ch:'S', color:'#3DD68C'},
+  ];
+  return `<div class="wordmark wordmark-${size}">` +
+    letters.map(l => `<span style="color:${l.color};">${l.ch}</span>`).join('') +
+    `</div>`;
+}
+function bonusRulesFor(variant){
+  if(variant === 'yambs') return {threshold:63, value:35};
+  if(variant === 'peril') return {threshold:30, value:null}; // Peril's bonus amount is dynamic, see bonusFor
+  return {threshold:60, value:30};
+}
+function bonusFor(scores){
+  const numbersTotal = numbersTotalOf(scores);
+  const rules = bonusRulesFor(state.variant);
+  if(numbersTotal < rules.threshold) return {active:false, amount:0};
+  const amount = state.variant === 'peril' ? numbersTotal : rules.value;
+  return {active:true, amount};
+}
+
+function emptyScores(cats){
+  const s = {};
+  cats.forEach(c => s[c.key] = null);
+  return s;
+}
+
+function newGame(names, variant){
+  names = (names && names.length) ? names : ['Player 1','Player 2'];
+  variant = (variant === 'yambs' || variant === 'peril') ? variant : 'classic';
+  const cats = catsFor(variant);
+  const players = names.map((n,i) => ({name: (n && n.trim()) || `Player ${i+1}`, scores: emptyScores(cats)}));
+  return {
+    players,
+    variant,
+    cats,
+    totalTurnsPlayed: 0,
+    dice: [1,1,1,1,1],
+    held: [false,false,false,false,false],
+    hasRolledOnce: false,
+    rerollsLeft: 2,
+    phase: 'setup', // setup -> playing -> final -> history
+    confirmZero: null,
+    animating: false,
+    saveChoice: null, // null | 'choosing' | 'entering' | 'saved' | 'skipped'
+    perilDeclared: null, // Peril variant: the hand declared for the current turn
+    online: {active: false}, // set when playing an online (cross-device) game
+  };
+}
+
+let state = newGame();
+state.phase = 'mode-select';
+let setupCount = 2;
+let setupVariant = 'classic';
+let onlineError = '';
+
+// --- Firebase (online play) ---
+const firebaseConfig = {
+  apiKey: "AIzaSyBCALaOdKfpCBeTkuALJR7SaqLcoz7BrCc",
+  authDomain: "yams-9c9b1.firebaseapp.com",
+  projectId: "yams-9c9b1",
+  storageBucket: "yams-9c9b1.firebasestorage.app",
+  messagingSenderId: "859643055367",
+  appId: "1:859643055367:web:05aa4302fe818f139049a2",
+};
+let fbDb = null;
+let fbAvailable = false;
+try{
+  if(typeof firebase !== 'undefined'){
+    firebase.initializeApp(firebaseConfig);
+    fbDb = firebase.firestore();
+    fbAvailable = true;
+  }
+} catch(e){
+  console.error('Firebase init failed', e);
+  fbAvailable = false;
+}
+
+function generateRoomCode(){
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no ambiguous 0/O or 1/I
+  let code = '';
+  for(let i=0;i<5;i++) code += chars[Math.floor(Math.random()*chars.length)];
+  return code;
+}
+
+function isMyTurn(){
+  if(!(state.online && state.online.active)) return true;
+  const curIdx = state.totalTurnsPlayed % state.players.length;
+  return state.online.mySlot === curIdx;
+}
+
+function syncToFirestore(){
+  if(!(state.online && state.online.active) || !fbAvailable) return;
+  fbDb.collection('yamsGames').doc(state.online.gameId).update({
+    players: state.players,
+    totalTurnsPlayed: state.totalTurnsPlayed,
+    dice: state.dice,
+    held: state.held,
+    hasRolledOnce: state.hasRolledOnce,
+    rerollsLeft: state.rerollsLeft,
+    perilDeclared: state.perilDeclared,
+    phase: state.phase === 'final' ? 'final' : 'playing',
+  }).catch(e => console.error('Sync failed', e));
+}
+
+function applyRemoteGameData(data){
+  if(!data) return;
+  state.online.maxPlayers = data.maxPlayers;
+  state.online.lobbyPlayers = (data.players || []).map(p => p.name);
+
+  if(data.phase === 'lobby'){
+    if(state.phase !== 'online-lobby') state.phase = 'online-lobby';
+    render();
+    return;
+  }
+  if(data.phase === 'playing' || data.phase === 'final'){
+    state.variant = data.variant;
+    state.cats = catsFor(data.variant);
+    state.players = data.players;
+    state.totalTurnsPlayed = data.totalTurnsPlayed;
+    state.dice = data.dice;
+    state.held = data.held || [false,false,false,false,false];
+    state.hasRolledOnce = data.hasRolledOnce;
+    state.rerollsLeft = data.rerollsLeft;
+    state.perilDeclared = data.perilDeclared;
+    state.phase = data.phase === 'final' ? 'final' : 'playing';
+    render();
+  }
+}
+
+function attachFirestoreListener(gameId){
+  if(!fbAvailable) return;
+  if(state.online.unsub) state.online.unsub();
+  state.online.unsub = fbDb.collection('yamsGames').doc(gameId).onSnapshot(
+    doc => { if(doc.exists) applyRemoteGameData(doc.data()); },
+    err => console.error('Listener error', err)
+  );
+}
+
+async function createGame(names_ignored){
+  onlineError = '';
+  if(!fbAvailable){ onlineError = "Can't reach the online service right now."; render(); return; }
+  const myName = (document.getElementById('onlineCreateName').value || '').trim() || 'Player 1';
+  const variant = setupVariant;
+  const maxPlayers = setupCount;
+  const cats = catsFor(variant);
+  render(); // show a brief "creating..." feel not strictly required, skip for now
+  let code = generateRoomCode();
+  try{
+    for(let attempt=0; attempt<5; attempt++){
+      const existing = await fbDb.collection('yamsGames').doc(code).get();
+      if(!existing.exists) break;
+      code = generateRoomCode();
+    }
+    await fbDb.collection('yamsGames').doc(code).set({
+      phase: 'lobby',
+      variant,
+      maxPlayers,
+      players: [{name: myName, scores: emptyScores(cats)}],
+    });
+  } catch(e){
+    console.error(e);
+    onlineError = "Couldn't create a game — check your connection and try again.";
+    render();
+    return;
+  }
+  state.online = {active:true, gameId:code, mySlot:0, unsub:null};
+  attachFirestoreListener(code);
+  state.phase = 'online-lobby';
+  render();
+}
+
+async function joinGame(){
+  onlineError = '';
+  if(!fbAvailable){ onlineError = "Can't reach the online service right now."; render(); return; }
+  const code = ((document.getElementById('onlineJoinCode').value || '').trim().toUpperCase());
+  const myName = (document.getElementById('onlineJoinName').value || '').trim();
+  if(!code){ onlineError = "Enter a room code."; render(); return; }
+  const ref = fbDb.collection('yamsGames').doc(code);
+  let mySlot = -1;
+  try{
+    await fbDb.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if(!snap.exists) throw new Error('not_found');
+      const data = snap.data();
+      if(data.phase !== 'lobby') throw new Error('already_started');
+      if(data.players.length >= data.maxPlayers) throw new Error('full');
+      mySlot = data.players.length;
+      const newPlayers = data.players.concat([{name: myName || `Player ${mySlot+1}`, scores: emptyScores(catsFor(data.variant))}]);
+      const update = { players: newPlayers };
+      if(newPlayers.length === data.maxPlayers){
+        update.phase = 'playing';
+        update.totalTurnsPlayed = 0;
+        update.dice = [1,1,1,1,1];
+        update.held = [false,false,false,false,false];
+        update.hasRolledOnce = false;
+        update.rerollsLeft = 2;
+        update.perilDeclared = null;
+      }
+      tx.update(ref, update);
+    });
+  } catch(e){
+    onlineError = e.message === 'not_found' ? "No game found with that code."
+      : e.message === 'already_started' ? "That game has already started."
+      : e.message === 'full' ? "That game is already full."
+      : "Couldn't join — check your connection and try again.";
+    render();
+    return;
+  }
+  state.online = {active:true, gameId:code, mySlot, unsub:null};
+  attachFirestoreListener(code);
+  state.phase = 'online-lobby';
+  render();
+}
+
+function leaveOnlineFlow(){
+  if(state.online && state.online.unsub) state.online.unsub();
+  onlineError = '';
+  state = newGame();
+  state.phase = 'mode-select';
+  render();
+}
+
+function diceCounts(dice){
+  const c = [0,0,0,0,0,0,0];
+  dice.forEach(d => c[d]++);
+  return c;
+}
+function diceSum(dice){ return dice.reduce((a,b)=>a+b,0); }
+function isYams(c){ return c.some(n => n===5); }
+function isSequence(dice){
+  const s = [...dice].sort((a,b)=>a-b).join(',');
+  return s === '1,2,3,4,5' || s === '2,3,4,5,6';
+}
+function isFullHouse(c){
+  const vals = c.slice(1).filter(n => n>0).sort((a,b)=>b-a);
+  return vals.length===2 && vals[0]===3 && vals[1]===2;
+}
+function smallStraightScore(dice){
+  const c = diceCounts(dice);
+  const runs = [[1,2,3,4,10],[2,3,4,5,14],[3,4,5,6,18]];
+  let best = null;
+  runs.forEach(([a,b,cc,d,score]) => {
+    if(c[a]>0 && c[b]>0 && c[cc]>0 && c[d]>0) best = score;
+  });
+  return best;
+}
+
+function catQualifies(key, dice, scores){
+  const c = diceCounts(dice);
+  if(key==='yams') return isYams(c);
+  if(key==='sequence') return isSequence(dice);
+  if(key==='fullhouse') return isFullHouse(c);
+  if(key==='hi') return scores.lo===null || diceSum(dice) > scores.lo;
+  if(key==='lo') return scores.hi===null || diceSum(dice) < scores.hi;
+  if(key==='chance') return true;
+  if(key==='threeofkind') return c.some(n => n>=3);
+  if(key==='gulley') return c.some(n => n>=4);
+  if(key==='smallstraight') return smallStraightScore(dice) !== null;
+  return c[FACE_MAP[key]] > 0;
+}
+
+function catScore(key, dice){
+  const c = diceCounts(dice);
+  if(key==='yams') return state.variant === 'yambs' ? 40 + dice[0] : 40;
+  if(key==='sequence') return 30;
+  if(key==='fullhouse') return 20;
+  if(key==='hi' || key==='lo' || key==='chance') return diceSum(dice);
+  if(key==='threeofkind' || key==='gulley') return diceSum(dice);
+  if(key==='smallstraight') return smallStraightScore(dice);
+  const face = FACE_MAP[key];
+  return c[face] * face;
+}
+
+function computeTotal(scores){
+  const usesHiLo = state.variant === 'classic' || state.variant === 'peril';
+  let base = 0;
+  state.cats.forEach(c => { if(!(usesHiLo && (c.key==='hi' || c.key==='lo'))) base += (scores[c.key] || 0); });
+  let hiloScore = 0;
+  if(usesHiLo){
+    const hi = scores.hi, lo = scores.lo;
+    if(hi !== null && lo !== null) hiloScore = hi + lo;
+  }
+  const bonus = bonusFor(scores).amount;
+  return base + hiloScore + bonus;
+}
+function numbersTotalOf(scores){
+  return NUM_KEYS.reduce((sum,k) => sum + (scores[k]||0), 0);
+}
+
+function render(){
+  const app = document.getElementById('app');
+  if(state.phase === 'mode-select'){ app.innerHTML = renderModeSelect(); attachModeSelectHandlers(); return; }
+  if(state.phase === 'online-menu'){ app.innerHTML = renderOnlineMenu(); attachOnlineMenuHandlers(); return; }
+  if(state.phase === 'online-lobby'){ app.innerHTML = renderOnlineLobby(); attachOnlineLobbyHandlers(); return; }
+  if(state.phase === 'setup'){ app.innerHTML = renderSetup(); attachSetupHandlers(); return; }
+  if(state.phase === 'final'){ app.innerHTML = renderFinal(); attachFinalHandlers(); return; }
+  if(state.phase === 'history'){ app.innerHTML = renderHistory(); attachHistoryHandlers(); return; }
+  app.innerHTML = renderGame();
+  attachGameHandlers();
+}
+
+function renderModeSelect(){
+  return `
+    <div class="setup">
+      <div class="setup-card">
+        ${wordmarkHtml('lg')}
+        <p class="tagline">ROLL UP</p>
+        <p>How are you playing?</p>
+        <button class="cta-btn" id="passPlayBtn" style="margin-bottom:10px;">Pass &amp; Play (same device)</button>
+        <button class="cta-btn" id="playOnlineBtn">Play Online (separate devices)</button>
+        <div><button class="history-link" id="viewHistoryBtn">View past games</button></div>
+      </div>
+    </div>
+  `;
+}
+function attachModeSelectHandlers(){
+  document.getElementById('passPlayBtn').onclick = () => { state.phase = 'setup'; render(); };
+  document.getElementById('playOnlineBtn').onclick = () => { onlineError=''; state.phase = 'online-menu'; render(); };
+  document.getElementById('viewHistoryBtn').onclick = () => { loadHistory('setup'); };
+}
+
+function renderOnlineMenu(){
+  const counts = [2,3,4].map(n => `<button class="count-btn ${setupCount===n?'active':''}" data-count="${n}">${n}P</button>`).join('');
+  const variants = [
+    {key:'classic', label:'Classic'},
+    {key:'yambs', label:'Yambs'},
+    {key:'peril', label:'Peril'},
+  ].map(v => `<button class="count-btn ${setupVariant===v.key?'active':''}" data-variant="${v.key}">${v.label}</button>`).join('');
+  const errorHtml = onlineError ? `<p style="color:var(--danger); font-size:13px; font-weight:600; margin:0 0 10px;">${onlineError}</p>` : '';
+  return `
+    <div class="setup">
+      <div class="setup-card">
+        <button class="back-link" id="backToModeBtn">&larr; Back</button>
+        <h1 style="font-size:28px;">Play Online</h1>
+        ${errorHtml}
+        <div class="save-box" style="margin-top:6px;">
+          <p style="font-weight:700; color:var(--ink); margin-bottom:10px;">Create a game</p>
+          <div class="setup-section-label">Variant</div>
+          <div class="variant-row">${variants}</div>
+          <div class="setup-section-label">Players</div>
+          <div class="player-count-row">${counts}</div>
+          <input id="onlineCreateName" type="text" placeholder="Your name" maxlength="16">
+          <button class="cta-btn" id="createGameBtn">Create game</button>
+        </div>
+        <div class="save-box">
+          <p style="font-weight:700; color:var(--ink); margin-bottom:10px;">Join a game</p>
+          <input id="onlineJoinCode" type="text" placeholder="Room code" maxlength="5" style="text-transform:uppercase;">
+          <input id="onlineJoinName" type="text" placeholder="Your name" maxlength="16">
+          <button class="cta-btn" id="joinGameBtn">Join game</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+function attachOnlineMenuHandlers(){
+  document.getElementById('backToModeBtn').onclick = () => { onlineError=''; state.phase = 'mode-select'; render(); };
+  document.querySelectorAll('[data-count]').forEach(el => {
+    el.onclick = () => { setupCount = parseInt(el.getAttribute('data-count')); render(); };
+  });
+  document.querySelectorAll('[data-variant]').forEach(el => {
+    el.onclick = () => { setupVariant = el.getAttribute('data-variant'); render(); };
+  });
+  document.getElementById('createGameBtn').onclick = () => { document.getElementById('createGameBtn').disabled = true; createGame(); };
+  document.getElementById('joinGameBtn').onclick = () => { document.getElementById('joinGameBtn').disabled = true; joinGame(); };
+}
+
+function renderOnlineLobby(){
+  const names = (state.online.lobbyPlayers || []);
+  const max = state.online.maxPlayers || setupCount;
+  const rows = names.map((n,i) => `<div class="hist-row" style="margin-bottom:6px;">${n}${i===state.online.mySlot ? ' (you)' : ''}</div>`).join('');
+  return `
+    <div class="final">
+      <div class="final-card">
+        <h1 style="font-size:24px;">Room ${state.online.gameId}</h1>
+        <p style="color:var(--ink-soft); font-size:13px;">Share this code with the others — waiting for ${max - names.length} more player${(max-names.length)===1?'':'s'}.</p>
+        <div style="margin:14px 0;">${rows}</div>
+        <button class="history-link" id="leaveLobbyBtn">Leave</button>
+      </div>
+    </div>
+  `;
+}
+function attachOnlineLobbyHandlers(){
+  const leaveBtn = document.getElementById('leaveLobbyBtn');
+  if(leaveBtn) leaveBtn.onclick = leaveOnlineFlow;
+}
+
+function renderSetup(){
+  let inputs = '';
+  for(let i=0;i<setupCount;i++){
+    inputs += `<input id="pname${i}" type="text" placeholder="Player ${i+1} name" maxlength="16">`;
+  }
+  const counts = [2,3,4].map(n => `<button class="count-btn ${setupCount===n?'active':''}" data-count="${n}">${n}P</button>`).join('');
+  const variants = [
+    {key:'classic', label:'Classic'},
+    {key:'yambs', label:'Yambs'},
+    {key:'peril', label:'Peril'},
+  ].map(v => `<button class="count-btn ${setupVariant===v.key?'active':''}" data-variant="${v.key}">${v.label}</button>`).join('');
+  return `
+    <div class="setup">
+      <div class="setup-card">
+        ${wordmarkHtml('lg')}
+        <p class="tagline">ROLL UP</p>
+        <div class="setup-section-label">Variant</div>
+        <div class="variant-row">${variants}</div>
+        <div class="setup-section-label">Players</div>
+        <div class="player-count-row">${counts}</div>
+        ${inputs}
+        <button class="cta-btn" id="startBtn">Start game</button>
+        <div><button class="history-link" id="viewHistoryBtn">View past games</button></div>
+        <div><button class="back-link" id="backToModeBtn" style="margin-top:10px; margin-bottom:0;">&larr; Back</button></div>
+      </div>
+    </div>
+  `;
+}
+function attachSetupHandlers(){
+  document.getElementById('backToModeBtn').onclick = () => { state.phase = 'mode-select'; render(); };
+  document.querySelectorAll('[data-count]').forEach(el => {
+    el.onclick = () => { setupCount = parseInt(el.getAttribute('data-count')); render(); };
+  });
+  document.querySelectorAll('[data-variant]').forEach(el => {
+    el.onclick = () => { setupVariant = el.getAttribute('data-variant'); render(); };
+  });
+  document.getElementById('startBtn').onclick = () => {
+    const names = [];
+    for(let i=0;i<setupCount;i++){
+      names.push(document.getElementById('pname'+i).value.trim());
+    }
+    state = newGame(names, setupVariant);
+    state.phase = 'playing';
+    render();
+  };
+  document.getElementById('viewHistoryBtn').onclick = () => { loadHistory('setup'); };
+}
+
+function pipsFor(n){
+  const layout = {
+    1: [4],
+    2: [0,8],
+    3: [0,4,8],
+    4: [0,2,6,8],
+    5: [0,2,4,6,8],
+    6: [0,2,3,5,6,8],
+  }[n];
+  let cells = '';
+  for(let i=0;i<9;i++){
+    cells += layout.includes(i) ? '<div class="pip"></div>' : '<div></div>';
+  }
+  return cells;
+}
+
+function renderGame(){
+  const N = state.players.length;
+  const curIdx = state.totalTurnsPlayed % N;
+  const cur = state.players[curIdx];
+  const curFilled = state.cats.filter(c => cur.scores[c.key] !== null).length;
+  const isPeril = state.variant === 'peril';
+  const online = state.online && state.online.active;
+  const canAct = isMyTurn();
+
+  const pillsHtml = state.players.map((p,i) => `
+        <div class="scorepill ${curIdx===i?'active':''}">
+          <div class="pname">${p.name}${online && i===state.online.mySlot ? ' (you)' : ''}</div>
+          <div class="ptotal">${computeTotal(p.scores)}</div>
+          <div class="pfilled">${state.cats.filter(c=>p.scores[c.key]!==null).length}/${state.cats.length} filled</div>
+        </div>`).join('');
+
+  const topAndSheet = (bodyHtml, bannerHtml) => `
+    <div class="topbar">
+      ${wordmarkHtml('sm')}
+      <div class="scorepill-row">
+        ${pillsHtml}
+      </div>
+    </div>
+    <div class="turn-banner">${bannerHtml}</div>
+    ${bodyHtml}
+    <div class="sheet-toggle"><button id="sheetBtn">${state.showSheet ? 'Hide full scoresheet' : 'View full scoresheet'}</button></div>
+    ${state.showSheet ? renderSheet() : ''}
+  `;
+
+  // Peril: declare phase — pick a hand before any dice are rolled
+  if(isPeril && state.perilDeclared === null){
+    if(!canAct){
+      const banner = `Waiting for <b>${cur.name}</b> to declare their hand&hellip;`;
+      return topAndSheet(`<div class="catlist"><p class="hint">They're choosing which hand to go for this turn.</p></div>`, banner);
+    }
+    let declareHtml = '';
+    ['Special hands','Numbers'].forEach(g => {
+      const open = state.cats.filter(c => c.group===g && cur.scores[c.key]===null);
+      if(open.length===0) return;
+      declareHtml += `<h2>${g}</h2>`;
+      open.forEach(c => {
+        declareHtml += `
+          <div class="catrow" data-declare="${c.key}" style="cursor:pointer;">
+            <div><span class="cname">${c.label}</span><span class="cpoints">${c.points}</span></div>
+            <div class="cactions"><span style="color:var(--blue); font-weight:700; font-size:13px;">Choose &rarr;</span></div>
+          </div>`;
+      });
+    });
+    const banner = `<b>${cur.name}'s</b> turn &middot; turn ${curFilled+1} of ${state.cats.length} &middot; declare your hand before rolling`;
+    return topAndSheet(`<div class="catlist">${declareHtml}</div>`, banner);
+  }
+
+  const DICE_COLORS = ['#FF4B5C','#FFC93C','#3DD68C','#2FA8E0','#A66BFF'];
+  let diceHtml = '';
+  if(!state.hasRolledOnce){
+    diceHtml = `<div class="dice-row">` + [0,1,2,3,4].map(i=>`<div class="die" style="background:${DICE_COLORS[i]};"></div>`).join('') + `</div>
+      <div class="hint">${canAct ? 'Tap roll to start your turn' : `Waiting for ${cur.name} to roll&hellip;`}</div>`;
+  } else {
+    diceHtml = `<div class="dice-row">` + state.dice.map((d,i)=>`
+        <div class="die ${state.held[i]?'held':''}" data-die="${i}" style="background:${DICE_COLORS[i]};">
+          ${state.held[i] ? '<div class="held-tag">HELD</div>' : ''}
+          ${pipsFor(d)}
+        </div>`).join('') + `</div>
+      <div class="hint">${!canAct ? `Waiting for ${cur.name}&hellip;` : state.rerollsLeft>0 ? 'Tap dice to hold them, then reroll the rest' : (isPeril ? 'No rerolls left' : 'No rerolls left — choose a hand below')}</div>`;
+  }
+
+  let rollBtnHtml = '';
+  if(canAct){
+    if(!state.hasRolledOnce){
+      rollBtnHtml = `<button class="roll-btn" id="rollBtn" ${state.animating?'disabled':''}>Roll all 5 dice</button>`;
+    } else if(state.rerollsLeft > 0){
+      rollBtnHtml = `<button class="roll-btn" id="rollBtn" ${state.animating?'disabled':''}>Reroll unheld dice</button>
+        <div class="reroll-count">${state.rerollsLeft} reroll${state.rerollsLeft===1?'':'s'} left</div>`;
+    }
+  }
+
+  let catlistHtml = '';
+  if(isPeril){
+    if(state.hasRolledOnce){
+      const key = state.perilDeclared;
+      const cat = state.cats.find(c => c.key===key);
+      const qualifies = catQualifies(key, state.dice, cur.scores);
+      const score = qualifies ? catScore(key, state.dice) : 0;
+      catlistHtml = `<h2>${canAct ? 'Your declared hand' : cur.name+"'s declared hand"}</h2>
+        <div class="catrow">
+          <div><span class="cname">${cat.label}</span><span class="cpoints">${qualifies ? 'Qualifies' : (state.rerollsLeft>0 ? 'Not yet qualifying' : 'Did not qualify')}</span></div>
+          <div class="cactions">
+            <div class="catscore ${qualifies?'':'dash'}">${qualifies?score:0}</div>
+            ${canAct ? `<button class="take-btn" id="perilResolveBtn" ${state.animating?'disabled':''}>${qualifies ? 'Take '+score : 'End turn (0)'}</button>` : ''}
+          </div>
+        </div>`;
+    }
+  } else if(state.hasRolledOnce){
+    let groups = ['Special hands','Numbers'];
+    groups.forEach(g => {
+      catlistHtml += `<h2>${g}</h2>`;
+      state.cats.filter(c=>c.group===g).forEach(c => {
+        const filled = cur.scores[c.key];
+        if(filled !== null){
+          catlistHtml += `
+            <div class="catrow filled-row">
+              <div><span class="cname">${c.label}</span><span class="cpoints">Filled</span></div>
+              <div class="catscore">${filled}</div>
+            </div>`;
+        } else if(!canAct){
+          const qualifies = catQualifies(c.key, state.dice, cur.scores);
+          const score = qualifies ? catScore(c.key, state.dice) : null;
+          catlistHtml += `
+            <div class="catrow locked-row">
+              <div><span class="cname">${c.label}</span><span class="cpoints">${c.points}</span></div>
+              <div class="catscore ${score===null?'dash':''}">${score===null?'—':score}</div>
+            </div>`;
+        } else {
+          const qualifies = catQualifies(c.key, state.dice, cur.scores);
+          const score = qualifies ? catScore(c.key, state.dice) : null;
+          const confirming = state.confirmZero === c.key;
+          const dis = (score===null || state.animating) ? 'disabled' : '';
+          catlistHtml += `
+            <div class="catrow">
+              <div><span class="cname">${c.label}</span><span class="cpoints">${c.points}</span></div>
+              <div class="cactions">
+                <div class="catscore ${score===null?'dash':''}">${score===null?'—':score}</div>
+                <button class="take-btn" data-take="${c.key}" ${dis}>Take</button>
+                ${confirming
+                  ? `<button class="zero-link" data-zero-confirm="${c.key}" style="color:var(--danger); font-weight:700; text-decoration:none;">Confirm 0?</button>
+                     <button class="zero-link" data-zero-cancel="1">Cancel</button>`
+                  : `<button class="zero-link" data-zero="${c.key}" ${state.animating?'disabled':''}>Forego</button>`
+                }
+              </div>
+            </div>`;
+        }
+      });
+    });
+  }
+
+  const bodyHtml = `
+    <div class="stage">
+      ${diceHtml}
+      ${rollBtnHtml}
+    </div>
+    <div class="catlist">${catlistHtml}</div>
+  `;
+  let bannerText;
+  if(!canAct){
+    bannerText = `Waiting for <b>${cur.name}'s</b> turn&hellip;`;
+  } else if(isPeril){
+    bannerText = `<b>${cur.name}'s</b> turn &middot; aiming for <b>${state.cats.find(c=>c.key===state.perilDeclared).label}</b>`;
+  } else {
+    bannerText = `<b>${cur.name}'s</b> turn &middot; turn ${curFilled+1} of ${state.cats.length}`;
+  }
+  return topAndSheet(bodyHtml, bannerText);
+}
+
+function renderSheet(){
+  const headerCells = state.players.map(p => `<th>${p.name}</th>`).join('');
+  let rows = state.cats.map(c => {
+    const cells = state.players.map(p => {
+      const v = p.scores[c.key];
+      return `<td class="${v===null?'empty':''}">${v===null?'-':v}</td>`;
+    }).join('');
+    return `<tr><td title="${c.label}">${c.abbr}</td>${cells}</tr>`;
+  }).join('');
+  const rules = bonusRulesFor(state.variant);
+  const numbersCells = state.players.map(p => `<td>${numbersTotalOf(p.scores)}</td>`).join('');
+  const bonusCells = state.players.map(p => { const b = bonusFor(p.scores); return `<td>${b.active ? '+'+b.amount : '-'}</td>`; }).join('');
+  const totalCells = state.players.map(p => `<td>${computeTotal(p.scores)}</td>`).join('');
+  return `
+    <div class="sheet">
+      <table class="full">
+        <thead><tr><th>Hand</th>${headerCells}</tr></thead>
+        <tbody>${rows}</tbody>
+        <tfoot>
+          <tr><td title="Numbers subtotal">NUM</td>${numbersCells}</tr>
+          <tr><td title="Numbers bonus (${rules.threshold}+)">BON</td>${bonusCells}</tr>
+          <tr><td title="Total">TOT</td>${totalCells}</tr>
+        </tfoot>
+      </table>
+    </div>
+  `;
+}
+
+function attachGameHandlers(){
+  const rollBtn = document.getElementById('rollBtn');
+  if(rollBtn) rollBtn.onclick = doRoll;
+
+  document.querySelectorAll('[data-die]').forEach(el => {
+    el.onclick = () => {
+      if(state.rerollsLeft <= 0 || state.animating || !isMyTurn()) return;
+      const i = parseInt(el.getAttribute('data-die'));
+      state.held[i] = !state.held[i];
+      syncToFirestore();
+      render();
+    };
+  });
+
+  document.querySelectorAll('[data-take]').forEach(el => {
+    el.onclick = () => {
+      const key = el.getAttribute('data-take');
+      resolveTurn(key, catScore(key, state.dice));
+    };
+  });
+  document.querySelectorAll('[data-zero]').forEach(el => {
+    el.onclick = () => {
+      state.confirmZero = el.getAttribute('data-zero');
+      render();
+    };
+  });
+  document.querySelectorAll('[data-zero-confirm]').forEach(el => {
+    el.onclick = () => {
+      const key = el.getAttribute('data-zero-confirm');
+      state.confirmZero = null;
+      resolveTurn(key, 0);
+    };
+  });
+  document.querySelectorAll('[data-zero-cancel]').forEach(el => {
+    el.onclick = () => {
+      state.confirmZero = null;
+      render();
+    };
+  });
+
+  document.querySelectorAll('[data-declare]').forEach(el => {
+    el.onclick = () => {
+      if(!isMyTurn()) return;
+      state.perilDeclared = el.getAttribute('data-declare');
+      syncToFirestore();
+      render();
+    };
+  });
+  const perilBtn = document.getElementById('perilResolveBtn');
+  if(perilBtn) perilBtn.onclick = () => {
+    if(state.animating || !isMyTurn()) return;
+    const curIdx = state.totalTurnsPlayed % state.players.length;
+    const cur = state.players[curIdx];
+    const key = state.perilDeclared;
+    const qualifies = catQualifies(key, state.dice, cur.scores);
+    resolveTurn(key, qualifies ? catScore(key, state.dice) : 0);
+  };
+
+  const sheetBtn = document.getElementById('sheetBtn');
+  if(sheetBtn) sheetBtn.onclick = () => { state.showSheet = !state.showSheet; render(); };
+}
+
+function doRoll(){
+  if(state.animating || !isMyTurn()) return;
+  const isFirst = !state.hasRolledOnce;
+  const indices = [];
+  for(let i=0;i<5;i++){
+    if(isFirst || !state.held[i]) indices.push(i);
+  }
+  const finalValues = {};
+  indices.forEach(i => finalValues[i] = 1 + Math.floor(Math.random()*6));
+
+  state.hasRolledOnce = true;
+  if(!isFirst) state.rerollsLeft -= 1;
+  state.animating = true;
+  render();
+
+  const cycleInterval = 65;
+  const perDieDuration = 420;
+  const stagger = 85;
+  let finished = 0;
+
+  indices.forEach((i, order) => {
+    setTimeout(() => {
+      const el = document.querySelector(`[data-die="${i}"]`);
+      if(!el) return;
+      el.classList.add('rolling');
+      const cyc = setInterval(() => {
+        el.innerHTML = pipsFor(1 + Math.floor(Math.random()*6));
+      }, cycleInterval);
+      setTimeout(() => {
+        clearInterval(cyc);
+        el.classList.remove('rolling');
+        state.dice[i] = finalValues[i];
+        el.innerHTML = pipsFor(finalValues[i]);
+        el.classList.add('settle');
+        setTimeout(() => el.classList.remove('settle'), 280);
+        finished++;
+        if(finished === indices.length){
+          state.animating = false;
+          syncToFirestore();
+          render();
+        }
+      }, perDieDuration);
+    }, order * stagger);
+  });
+}
+
+function resolveTurn(key, score){
+  if(!isMyTurn()) return;
+  const curIdx = state.totalTurnsPlayed % state.players.length;
+  state.players[curIdx].scores[key] = score;
+  state.totalTurnsPlayed += 1;
+  state.dice = [1,1,1,1,1];
+  state.held = [false,false,false,false,false];
+  state.hasRolledOnce = false;
+  state.rerollsLeft = 2;
+  state.perilDeclared = null;
+
+  const bothDone = state.players.every(p => state.cats.every(c => p.scores[c.key] !== null));
+  if(bothDone){
+    state.phase = 'final';
+    if(state.online && state.online.active) autoSaveOnlineHistory();
+  }
+  syncToFirestore();
+  render();
+}
+
+function renderFinal(){
+  const results = state.players.map(p => {
+    const b = bonusFor(p.scores);
+    return {
+      name: p.name,
+      total: computeTotal(p.scores),
+      bonusActive: b.active,
+      bonusAmount: b.amount,
+    };
+  });
+  const maxTotal = Math.max(...results.map(r => r.total));
+  const winners = results.filter(r => r.total === maxTotal).map(r => r.name);
+  let winnerText;
+  if(winners.length === results.length) winnerText = `It's a tie!`;
+  else if(winners.length > 1) winnerText = `${winners.join(' & ')} tie for the win!`;
+  else winnerText = `${winners[0]} wins!`;
+
+  const totalsHtml = results.map(r => `<div class="totalcard"><div class="n">${r.name}</div><div class="v">${r.total}</div></div>`).join('');
+  const bonusLine = results.map(r => `${r.name} ${r.bonusActive ? '+'+r.bonusAmount : 'none'}`).join(' &middot; ');
+
+  let saveBoxHtml = '';
+  if(state.online && state.online.active){
+    saveBoxHtml = `<div class="save-box"><p class="save-status">This result was saved automatically.</p></div>`;
+  } else if(!state.saveChoice){
+    saveBoxHtml = `
+      <div class="save-box">
+        <p>Save this result to your game history?</p>
+        <div class="save-row">
+          <button class="save-yes" id="saveYesBtn">Save result</button>
+          <button class="save-no" id="saveNoBtn">Don't save</button>
+        </div>
+      </div>`;
+  } else if(state.saveChoice === 'entering'){
+    saveBoxHtml = `
+      <div class="save-box">
+        <p>Where was this played?</p>
+        <input id="locationInput" type="text" placeholder="e.g. Jonny's kitchen table" maxlength="40">
+        <button class="save-confirm-btn" id="confirmSaveBtn">Confirm and save</button>
+      </div>`;
+  } else if(state.saveChoice === 'saving'){
+    saveBoxHtml = `<div class="save-box"><p class="save-status">Saving…</p></div>`;
+  } else if(state.saveChoice === 'saved'){
+    saveBoxHtml = `<div class="save-box"><p class="save-status">Saved to your game history.</p></div>`;
+  } else if(state.saveChoice === 'error'){
+    saveBoxHtml = `<div class="save-box"><p class="save-status">Couldn't save — try again?</p><div class="save-row"><button class="save-yes" id="retrySaveBtn">Retry</button></div></div>`;
+  }
+  // 'skipped' shows nothing further
+
+  return `
+    <div class="final">
+      <div class="final-card">
+        <h1>GAME OVER</h1>
+        <p style="margin-top:-6px; color:var(--ink-soft); font-size:12px; text-transform:uppercase; letter-spacing:1px;">${state.variant === 'yambs' ? 'Yambs' : state.variant === 'peril' ? 'Peril' : 'Classic'}</p>
+        <div class="winner">${winnerText}</div>
+        <div class="totals">
+          ${totalsHtml}
+        </div>
+        <div class="bonusline">
+          Numbers bonus: ${bonusLine}
+        </div>
+        ${renderSheet()}
+        ${saveBoxHtml}
+        <div style="margin-top:24px;">
+          <button class="restart-btn" id="restartBtn">${state.online && state.online.active ? 'Back to menu' : 'Play again'}</button>
+          <div><button class="history-link" id="viewHistoryBtn2">View past games</button></div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function attachFinalHandlers(){
+  document.getElementById('restartBtn').onclick = () => {
+    if(state.online && state.online.active){
+      leaveOnlineFlow();
+      return;
+    }
+    state = newGame(state.players.map(p => p.name), state.variant);
+    state.phase = 'playing';
+    render();
+  };
+  const viewHist = document.getElementById('viewHistoryBtn2');
+  if(viewHist) viewHist.onclick = () => loadHistory('final');
+
+  const yesBtn = document.getElementById('saveYesBtn');
+  if(yesBtn) yesBtn.onclick = () => { state.saveChoice = 'entering'; render(); };
+  const noBtn = document.getElementById('saveNoBtn');
+  if(noBtn) noBtn.onclick = () => { state.saveChoice = 'skipped'; render(); };
+  const confirmBtn = document.getElementById('confirmSaveBtn');
+  if(confirmBtn) confirmBtn.onclick = () => {
+    const loc = document.getElementById('locationInput').value.trim();
+    saveGameToHistory(loc);
+  };
+  const retryBtn = document.getElementById('retrySaveBtn');
+  if(retryBtn) retryBtn.onclick = () => { state.saveChoice = 'entering'; render(); };
+}
+
+async function saveGameToHistory(location){
+  state.saveChoice = 'saving';
+  render();
+  if(!fbAvailable){
+    state.saveChoice = 'error';
+    render();
+    return;
+  }
+  try{
+    const results = state.players.map(p => ({name: p.name, score: computeTotal(p.scores)}));
+    const maxTotal = Math.max(...results.map(r => r.score));
+    const winners = results.filter(r => r.score === maxTotal).map(r => r.name);
+    const winner = winners.length === results.length ? 'Tie' : winners.join(' & ');
+    await fbDb.collection('yamsHistory').add({
+      date: new Date().toISOString(),
+      location: location || '',
+      variant: state.variant,
+      mode: 'local',
+      players: results,
+      winner,
+    });
+    state.saveChoice = 'saved';
+  } catch(e){
+    console.error('Save failed', e);
+    state.saveChoice = 'error';
+  }
+  render();
+}
+
+async function autoSaveOnlineHistory(){
+  if(!fbAvailable) return;
+  try{
+    const results = state.players.map(p => ({name: p.name, score: computeTotal(p.scores)}));
+    const maxTotal = Math.max(...results.map(r => r.score));
+    const winners = results.filter(r => r.score === maxTotal).map(r => r.name);
+    const winner = winners.length === results.length ? 'Tie' : winners.join(' & ');
+    await fbDb.collection('yamsHistory').add({
+      date: new Date().toISOString(),
+      location: '',
+      variant: state.variant,
+      mode: 'online',
+      gameId: state.online.gameId,
+      players: results,
+      winner,
+    });
+  } catch(e){
+    console.error('Auto-save failed', e);
+  }
+}
+
+async function loadHistory(returnTo){
+  state.historyReturnTo = returnTo;
+  state.historyList = null;
+  state.historyError = null;
+  state.phase = 'history';
+  render();
+  if(!fbAvailable){
+    state.historyList = [];
+    state.historyError = "Couldn't load history — check your connection.";
+    render();
+    return;
+  }
+  try{
+    const snap = await fbDb.collection('yamsHistory').orderBy('date','desc').limit(50).get();
+    state.historyList = snap.docs.map(d => d.data());
+  } catch(e){
+    console.error('Load history failed', e);
+    state.historyList = [];
+    state.historyError = "Couldn't load history — check your connection.";
+  }
+  render();
+}
+
+function renderHistory(){
+  let listHtml;
+  if(state.historyError){
+    listHtml = `<p class="save-status">${state.historyError}</p>`;
+  } else if(state.historyList === null){
+    listHtml = `<p class="save-status">Loading…</p>`;
+  } else if(state.historyList.length === 0){
+    listHtml = `<p class="save-status">No saved games yet.</p>`;
+  } else {
+    listHtml = state.historyList.map(r => {
+      const d = new Date(r.date);
+      const dateStr = isNaN(d) ? '' : d.toLocaleDateString(undefined, {day:'numeric', month:'short', year:'numeric'});
+      const scoreLine = (r.players && Array.isArray(r.players))
+        ? r.players.map(p => `${p.name} ${p.score}`).join(' &middot; ')
+        : `${r.p1} ${r.t0} — ${r.t1} ${r.p2}`;
+      const variantTag = r.variant === 'yambs' ? 'Yambs' : r.variant === 'peril' ? 'Peril' : 'Classic';
+      const modeTag = r.mode === 'online' ? 'Online' : 'Local';
+      return `
+        <div class="hist-row">
+          <div class="hist-top"><span>${scoreLine}</span></div>
+          <div class="hist-meta">${r.winner === 'Tie' ? 'Tied' : r.winner + ' won'} &middot; ${variantTag} &middot; ${modeTag} &middot; ${dateStr}${r.location ? ' &middot; ' + r.location : ''}</div>
+        </div>`;
+    }).join('');
+  }
+  return `
+    <div class="final">
+      <div class="final-card">
+        <button class="back-link" id="backBtn">&larr; Back</button>
+        <h1 style="font-size:24px;">Past games</h1>
+        ${listHtml}
+      </div>
+    </div>
+  `;
+}
+function attachHistoryHandlers(){
+  document.getElementById('backBtn').onclick = () => {
+    state.phase = state.historyReturnTo === 'final' ? 'final' : 'setup';
+    render();
+  };
+}
+
+render();
+</script>
+</body>
+</html>
