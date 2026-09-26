@@ -391,8 +391,20 @@ function wordmarkHtml(size){
     letters.map(l => `<span style="color:${l.color};">${l.ch}</span>`).join('') +
     `</div>`;
 }
+let goldDieIconCounter = 0;
 function crownIcon(){
-  return `<svg class="crown-icon" viewBox="0 0 10 7" width="16" height="11" xmlns="http://www.w3.org/2000/svg" shape-rendering="crispEdges"><path d="M0,0 L2,0 L2,2 L4,2 L4,0 L6,0 L6,2 L8,2 L8,0 L10,0 L10,7 L0,7 Z" fill="#FFC93C" stroke="#1B1B2F" stroke-width="0.7" stroke-linejoin="miter"/></svg>`;
+  goldDieIconCounter++;
+  const clipId = 'goldDieClip' + goldDieIconCounter;
+  return `<svg class="crown-icon" viewBox="0 0 10 10" width="14" height="14" xmlns="http://www.w3.org/2000/svg" shape-rendering="crispEdges">
+    <defs><clipPath id="${clipId}"><rect x="0.5" y="0.5" width="9" height="9" rx="1.3"/></clipPath></defs>
+    <g clip-path="url(#${clipId})">
+      <rect x="0" y="0" width="10" height="3.3" fill="#FFE18A"/>
+      <rect x="0" y="3.3" width="10" height="3.4" fill="#E3A93C"/>
+      <rect x="0" y="6.7" width="10" height="3.3" fill="#A97A1F"/>
+    </g>
+    <rect x="0.5" y="0.5" width="9" height="9" rx="1.3" fill="none" stroke="#1B1B2F" stroke-width="1"/>
+    <circle cx="5" cy="5" r="1.3" fill="#1B1B2F"/>
+  </svg>`;
 }
 function bonusRulesFor(variant){
   if(variant === 'yambs') return {threshold:63, value:35};
