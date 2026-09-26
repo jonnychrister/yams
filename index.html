@@ -170,8 +170,9 @@
   .highscore-banner.alltime{ background: var(--yellow); color:var(--ink); font-size:14px; box-shadow:6px 6px 0 var(--held); }
   .highscore-banner.bigplay{ background: var(--purple); color:#fff; font-size:12px; box-shadow:4px 4px 0 var(--ink); }
   .raredie-grid{ display:grid; grid-template-columns: repeat(auto-fill, minmax(44px,1fr)); gap:8px; margin-top:8px; max-width:280px; }
+  .raredie-grid-profile{ display:grid; grid-template-columns: repeat(auto-fit, minmax(50px,1fr)); gap:12px; margin-top:8px; width:100%; }
   .raredie-icon{
-    position:relative; width:44px; height:44px; border:3px solid var(--ink); border-radius:8px;
+    position:relative; width:100%; aspect-ratio:1; border:3px solid var(--ink); border-radius:8px;
     display:flex; align-items:center; justify-content:center; font-family:'Press Start 2P',monospace;
     font-size:16px; color: var(--disabled-text); cursor:pointer; box-shadow:2px 2px 0 var(--ink);
   }
@@ -586,7 +587,7 @@ function pipCountFor(id){
   return (sum % 6) + 1;
 }
 function renderRareDiceProfileGrid(rareDiceMap){
-  return `<div class="raredie-grid">` + RARE_DICE.map(a => {
+  return `<div class="raredie-grid-profile">` + RARE_DICE.map(a => {
     const count = (rareDiceMap && rareDiceMap[a.id]) || 0;
     if(count <= 0) return `<div class="raredie-icon locked">?</div>`;
     return `<div class="raredie-icon" data-raredie="${a.id}" style="background:${a.color};"><div class="raredie-pips">${pipsFor(pipCountFor(a.id))}</div>${count>1?`<span class="raredie-count">${count}</span>`:''}</div>`;
