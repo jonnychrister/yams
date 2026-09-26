@@ -455,7 +455,7 @@ let loginReturnTo = 'online-menu';
 const VARIANT_KEYS = ['classic','yambs','peril'];
 function emptyStatsBlock(){
   const s = {};
-  VARIANT_KEYS.forEach(v => s[v] = {gamesPlayed:0, highestScore:0, totalScore:0});
+  VARIANT_KEYS.forEach(v => s[v] = {gamesPlayed:0, highestScore:0, totalScore:0, wins:0});
   return s;
 }
 function restoreLogin(){
@@ -1492,7 +1492,9 @@ async function autoSaveOnlineHistory(){
     const results = state.players.map(p => ({name: p.name, username: p.username || null, score: computeTotal(p.scores)}));
     const maxTotal = Math.max(...results.map(r => r.score));
     const winners = results.filter(r => r.score === maxTotal).map(r => r.name);
-    const winner = winners.length === results.length ? 'Tie' : winners.join(' & ');
+    const isTotalTie = winners.length === results.length;
+    const winner = isTotalTie ? 'Tie' : winners.join(' & ');
+    const winnerUsernames = isTotalTie ? [] : results.filter(r => r.score === maxTotal).map(r => r.username).filter(Boolean);
     const usernames = results.map(r => r.username).filter(Boolean);
     const docId = await getNextGameId();
     await fbDb.collection('yamsHistory').doc(docId).set({
@@ -1504,6 +1506,7 @@ async function autoSaveOnlineHistory(){
       players: results,
       usernames,
       winner,
+      winnerUsernames,
     });
     state.historyDocId = docId;
 
@@ -1518,17 +1521,19 @@ async function autoSaveOnlineHistory(){
       if(!r.username) continue;
       const ref = fbDb.collection('players').doc(r.username);
       let personalBest = false;
+      const isWinner = winnerUsernames.includes(r.username);
       try{
         await fbDb.runTransaction(async (tx) => {
           const snap = await tx.get(ref);
           const d = snap.exists ? snap.data() : {};
           const stats = d.stats || emptyStatsBlock();
-          const prev = stats[state.variant] || {gamesPlayed:0, highestScore:0, totalScore:0};
+          const prev = stats[state.variant] || {gamesPlayed:0, highestScore:0, totalScore:0, wins:0};
           if(r.score > prev.highestScore) personalBest = true;
           stats[state.variant] = {
             gamesPlayed: prev.gamesPlayed + 1,
             highestScore: Math.max(prev.highestScore, r.score),
             totalScore: prev.totalScore + r.score,
+            wins: (prev.wins || 0) + (isWinner ? 1 : 0),
           };
           tx.update(ref, {stats});
           if(currentUser && currentUser.usernameLower === r.username) currentUser.stats = stats;
@@ -1736,7 +1741,7 @@ function renderProfile(){
     {key:'yambs', label:'Yambs'},
     {key:'peril', label:'Peril'},
   ].map(v => `<button class="count-btn ${state.profileVariant===v.key?'active':''}" data-profvariant="${v.key}">${v.label}</button>`).join('');
-  const s = (p.stats && p.stats[state.profileVariant]) || {gamesPlayed:0, highestScore:0, totalScore:0};
+  const s = (p.stats && p.stats[state.profileVariant]) || {gamesPlayed:0, highestScore:0, totalScore:0, wins:0};
   const avg = s.gamesPlayed > 0 ? Math.round(s.totalScore / s.gamesPlayed) : 0;
   const historyHtml = (state.profileHistory && state.profileHistory.length > 0)
     ? state.profileHistory.map(r => {
@@ -1744,9 +1749,11 @@ function renderProfile(){
         const dateStr = isNaN(d) ? '' : d.toLocaleDateString(undefined, {day:'numeric', month:'short', year:'numeric'});
         const mine = (r.players||[]).find(pl => pl.username === p.usernameLower);
         const variantTag = r.variant === 'yambs' ? 'Yambs' : r.variant === 'peril' ? 'Peril' : 'Classic';
+        const isTied = r.winner === 'Tie';
+        const isWon = !isTied && r.winnerUsernames && r.winnerUsernames.includes(p.usernameLower);
         return `
           <div class="hist-row">
-            <div class="hist-top"><span>${mine ? mine.score : '—'} pts</span><span>${r.winner===p.username ? 'Won' : (r.winner==='Tie'?'Tied':'Lost')}</span></div>
+            <div class="hist-top"><span>${mine ? mine.score : '—'} pts</span><span>${isTied ? 'Tied' : (isWon ? 'Won' : 'Lost')}</span></div>
             <div class="hist-meta">${variantTag} &middot; ${dateStr}${r.location ? ' &middot; ' + r.location : ''}</div>
           </div>`;
       }).join('')
@@ -1760,6 +1767,7 @@ function renderProfile(){
         <div class="variant-row" style="margin-top:14px;">${variants}</div>
         <div class="totals" style="margin-top:6px;">
           <div class="totalcard"><div class="n">Played</div><div class="v" style="font-size:18px;">${s.gamesPlayed}</div></div>
+          <div class="totalcard"><div class="n">Won</div><div class="v" style="font-size:18px;">${s.wins||0}</div></div>
           <div class="totalcard"><div class="n">Highest</div><div class="v" style="font-size:18px;">${s.highestScore}</div></div>
           <div class="totalcard"><div class="n">Average</div><div class="v" style="font-size:18px;">${avg}</div></div>
         </div>
