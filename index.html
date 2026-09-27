@@ -782,7 +782,10 @@ function applyRemoteGameData(data){
     state.perilDeclared = data.perilDeclared;
     if(data.highScoreFlags) state.highScoreFlags = data.highScoreFlags;
     state.phase = data.phase === 'final' ? 'final' : 'playing';
-    if(data.lastAction && data.lastAction.ts !== state.shownActionTs){
+    if(!state.online.initialSnapshotSeen){
+      state.online.initialSnapshotSeen = true;
+      if(data.lastAction) state.shownActionTs = data.lastAction.ts; // seen it, but it may predate this connection - don't toast it
+    } else if(data.lastAction && data.lastAction.ts !== state.shownActionTs){
       state.shownActionTs = data.lastAction.ts;
       state.toastAction = data.lastAction;
       const thisTs = data.lastAction.ts;
@@ -795,6 +798,7 @@ function applyRemoteGameData(data){
 function attachFirestoreListener(gameId){
   if(!fbAvailable) return;
   if(state.online.unsub) state.online.unsub();
+  state.online.initialSnapshotSeen = false;
   state.online.unsub = fbDb.collection('yamsGames').doc(gameId).onSnapshot(
     doc => { if(doc.exists) applyRemoteGameData(doc.data()); },
     err => console.error('Listener error', err)
@@ -1743,10 +1747,12 @@ async function autoSaveOnlineHistory(){
       }
     } catch(e){ console.error('Leaderboard check failed', e); }
 
+    const maxScoreThisGame = Math.max(...results.map(r => r.score));
+
     state.highScoreFlags = {};
     for(const r of results){
       if(!r.username) continue;
-      const isAllTimeBest = r.score > currentTop;
+      const isAllTimeBest = r.score === maxScoreThisGame && r.score > currentTop;
       if(isAllTimeBest){
         // Yamesses II: dethroning the reigning record holder in a game they were actually part of
         if(previousHolderUsername && previousHolderUsername !== r.username && usernames.includes(previousHolderUsername)){
@@ -1756,7 +1762,6 @@ async function autoSaveOnlineHistory(){
             if(!dethroner.earnedRareDice.includes('yamesses-ii')) dethroner.earnedRareDice.push('yamesses-ii');
           }
         }
-        currentTop = r.score; // so a later player in the same game can't also claim it at a lower score
       }
 
       const ref = fbDb.collection('players').doc(r.username);
