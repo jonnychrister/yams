@@ -785,7 +785,8 @@ function applyRemoteGameData(data){
     if(data.lastAction && data.lastAction.ts !== state.shownActionTs){
       state.shownActionTs = data.lastAction.ts;
       state.toastAction = data.lastAction;
-      setTimeout(() => { state.toastAction = null; render(); }, 3000);
+      const thisTs = data.lastAction.ts;
+      setTimeout(() => { if(state.toastAction && state.toastAction.ts === thisTs){ state.toastAction = null; render(); } }, 3000);
     }
     render();
   }
@@ -1437,6 +1438,8 @@ function doRoll(){
   for(let i=0;i<5;i++){
     if(isFirst || !state.held[i]) indices.push(i);
   }
+  if(!isFirst && indices.length === 0) return; // nothing held-back to reroll - avoid setting animating with no completion path
+
   const finalValues = {};
   indices.forEach(i => finalValues[i] = 1 + Math.floor(Math.random()*6));
 
@@ -1504,8 +1507,13 @@ function resolveTurn(key, score){
 
   state.lastAction = {name: state.players[curIdx].name, label: cat.label, score, ts: Date.now()};
   state.shownActionTs = state.lastAction.ts; // don't re-toast our own action when our echo arrives
-  state.toastAction = state.lastAction;
-  setTimeout(() => { state.toastAction = null; render(); }, 3000);
+  if(!(state.online && state.online.active)){
+    // Local pass-and-play: one shared screen, so a quick confirmation before passing the phone is useful.
+    // Online: skip showing it to the acting player themselves - only the other device shows it, via sync.
+    state.toastAction = state.lastAction;
+    const thisTs = state.lastAction.ts;
+    setTimeout(() => { if(state.toastAction && state.toastAction.ts === thisTs){ state.toastAction = null; render(); } }, 3000);
+  }
   state.totalTurnsPlayed += 1;
   state.dice = [1,1,1,1,1];
   state.held = [false,false,false,false,false];
