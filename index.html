@@ -172,13 +172,11 @@
   .raredie-grid{ display:grid; grid-template-columns: repeat(auto-fill, minmax(44px,1fr)); gap:8px; margin-top:8px; max-width:280px; }
   .raredie-grid-profile{ display:grid; grid-template-columns: repeat(auto-fit, minmax(50px,1fr)); gap:12px; margin-top:8px; width:100%; }
   .raredie-icon{
-    position:relative; width:100%; aspect-ratio:1; border:3px solid var(--ink); border-radius:8px;
+    position:relative; width:100%; aspect-ratio:1; border-radius:8px;
     display:flex; align-items:center; justify-content:center; font-family:'Press Start 2P',monospace;
-    font-size:16px; color: var(--disabled-text); cursor:pointer; box-shadow:2px 2px 0 var(--ink);
+    font-size:16px; color: var(--disabled-text); cursor:pointer;
   }
-  .raredie-icon.locked{ background: var(--disabled-bg); cursor:default; box-shadow:none; border-color: var(--disabled-text); }
-  .raredie-pips{ display:grid; grid-template-columns:repeat(3,1fr); grid-template-rows:repeat(3,1fr); gap:2px; width:26px; height:26px; }
-  .raredie-pips .pip{ width:5px; height:5px; }
+  .raredie-icon.locked{ background: var(--disabled-bg); cursor:default; border:3px solid var(--disabled-text); box-shadow:2px 2px 0 var(--ink); }
   .raredie-count{
     position:absolute; bottom:-5px; right:-5px; background:var(--ink); color:#fff; font-size:9px;
     font-family:'Silkscreen',monospace; font-weight:700; border-radius:50%; width:16px; height:16px;
@@ -512,33 +510,48 @@ const VARIANT_KEYS = ['classic','yambs','peril'];
 // trigger:'gameEnd' -> check(player, variant) runs once when the game finishes, against final scores
 const RARE_DICE = [
   {id:'yams', name:'Yams!', flavor:'Objective Complete', description:'Rolled Yams', color:'#FF4B5C', trigger:'turn',
+    faceContent: `<g transform="rotate(-35 32 32)"><rect x="-30" y="-20" width="34" height="120" fill="#FFE18A"/><rect x="4" y="-20" width="34" height="120" fill="#E3A93C"/><rect x="38" y="-20" width="34" height="120" fill="#A97A1F"/></g><rect x="4" y="4" width="26" height="20" fill="#FFFFFF" opacity="0.35"/><rect x="36" y="40" width="24" height="20" fill="#1B1B2F" opacity="0.25"/><rect x="9" y="8" width="4" height="4" fill="#FFFFFF" opacity="0.9"/><rect x="15" y="13" width="10" height="10" fill="#1B1B2F"/><rect x="39" y="13" width="10" height="10" fill="#1B1B2F"/><rect x="15" y="27" width="10" height="10" fill="#1B1B2F"/><rect x="39" y="27" width="10" height="10" fill="#1B1B2F"/><rect x="15" y="41" width="10" height="10" fill="#1B1B2F"/><rect x="39" y="41" width="10" height="10" fill="#1B1B2F"/>`,
     check: ctx => ctx.key==='yams' && ctx.score>0},
   {id:'barack-oyama', name:'Barack Oyama', flavor:'I pledge allegiance to the Yams', description:'Hit Yams in a single roll', color:'#2FA8E0', trigger:'turn',
+    faceContent: `<g transform="rotate(-35 32 32)"><rect x="-30" y="-20" width="34" height="120" fill="#6F7BFF"/><rect x="4" y="-20" width="34" height="120" fill="#A66BFF"/><rect x="38" y="-20" width="34" height="120" fill="#4FD1FF"/></g><rect x="4" y="4" width="26" height="20" fill="#FFFFFF" opacity="0.30"/><rect x="36" y="40" width="24" height="20" fill="#1B1B2F" opacity="0.22"/><rect x="27" y="27" width="10" height="10" fill="#1B1B2F"/>`,
     check: ctx => ctx.key==='yams' && ctx.score>0 && ctx.rerollsLeft===2},
   {id:'yamwise-gamgee', name:'Yamwise Gamgee', flavor:'Mash em, boil em, stick em in a stew', description:'Hit a Sequence in a single roll', color:'#3DD68C', trigger:'turn',
+    faceContent: `<g transform="rotate(-35 32 32)"><rect x="-30" y="-20" width="34" height="120" fill="#C8F0DC"/><rect x="4" y="-20" width="34" height="120" fill="#F0ECD8"/><rect x="38" y="-20" width="34" height="120" fill="#E0D4F0"/></g><rect x="0" y="0" width="40" height="32" fill="#FFFFFF" opacity="0.45"/><rect x="15" y="15" width="10" height="10" fill="#1B1B2F"/><rect x="27" y="27" width="10" height="10" fill="#1B1B2F"/><rect x="39" y="39" width="10" height="10" fill="#1B1B2F"/>`,
     check: ctx => ctx.key==='sequence' && ctx.score>0 && ctx.rerollsLeft===2},
   {id:'lebron-yames', name:'LeBron Yames', flavor:'Buzzer beater!', description:'Hit Yams on the final roll of the game', color:'#A66BFF', trigger:'turn',
+    faceContent: `<rect x="4" y="4" width="56" height="56" fill="#F2EFE6"/><rect x="10" y="10" width="9" height="9" fill="#FF9E6B" opacity="0.75"/><rect x="34" y="18" width="8" height="8" fill="#6BB8FF" opacity="0.7"/><rect x="20" y="34" width="8" height="8" fill="#C77DFF" opacity="0.6"/><rect x="42" y="40" width="7" height="7" fill="#FFD86B" opacity="0.7"/><rect x="4" y="4" width="24" height="18" fill="#FFFFFF" opacity="0.4"/><rect x="36" y="40" width="24" height="20" fill="#1B1B2F" opacity="0.12"/><rect x="15" y="15" width="10" height="10" fill="#1B1B2F"/><rect x="39" y="15" width="10" height="10" fill="#1B1B2F"/><rect x="15" y="39" width="10" height="10" fill="#1B1B2F"/><rect x="39" y="39" width="10" height="10" fill="#1B1B2F"/>`,
     check: ctx => ctx.key==='yams' && ctx.score>0 && ctx.isLastCategoryForPlayer},
   {id:'snake-eyes', name:'Snake Eyes', flavor:'Hsss...', description:'Rolled a double 1 to hit Yams', color:'#5C6B2F', trigger:'turn',
+    faceContent: `<rect x="4" y="4" width="56" height="56" fill="#EAF3EC"/><rect x="4" y="4" width="56" height="56" fill="#3A6B4A" opacity="0.28"/><rect x="4" y="4" width="6" height="56" fill="#2E5A3C" opacity="0.55"/><rect x="54" y="4" width="6" height="56" fill="#2E5A3C" opacity="0.55"/><g transform="rotate(-35 32 32)"><rect x="-4" y="-30" width="7" height="120" fill="#FFFFFF" opacity="0.55"/></g><rect x="27" y="27" width="10" height="10" fill="#1B1B2F"/>`,
     check: ctx => ctx.key==='yams' && ctx.score>0 && ctx.dice.every(d=>d===1) && ctx.held.filter(Boolean).length===3},
   {id:'yammstein', name:'Yammstein', flavor:'Du Hast Mich', description:'Failed to score a Hi/Lo', color:'#2B2B2B', trigger:'gameEnd', variantScope:'classic',
+    faceContent: `<g transform="rotate(-35 32 32)"><rect x="-30" y="-20" width="34" height="120" fill="#8A8F99"/><rect x="4" y="-20" width="34" height="120" fill="#4A4F58"/><rect x="38" y="-20" width="34" height="120" fill="#22252B"/></g><rect x="4" y="4" width="24" height="18" fill="#FFFFFF" opacity="0.3"/><rect x="36" y="40" width="24" height="20" fill="#000000" opacity="0.3"/><rect x="9" y="8" width="4" height="4" fill="#FFFFFF" opacity="0.9"/><rect x="15" y="15" width="10" height="10" fill="#0B0C0E"/><rect x="39" y="39" width="10" height="10" fill="#0B0C0E"/>`,
     check: (player, variant) => variant==='classic' && !(player.scores.hi>0 && player.scores.lo>0)},
   {id:'yamibia', name:'Yamibia', flavor:"Once wasn't enough?", description:'Rolled Yams twice in one game', color:'#D4A574', trigger:'turn',
+    faceContent: `<g transform="rotate(-35 32 32)"><rect x="-30" y="-20" width="34" height="120" fill="#E8B87A"/><rect x="4" y="-20" width="34" height="120" fill="#E87A9E"/><rect x="38" y="-20" width="34" height="120" fill="#9E6FD8"/></g><rect x="4" y="4" width="26" height="20" fill="#FFFFFF" opacity="0.3"/><rect x="36" y="40" width="24" height="20" fill="#1B1B2F" opacity="0.2"/><rect x="15" y="15" width="10" height="10" fill="#1B1B2F"/><rect x="39" y="15" width="10" height="10" fill="#1B1B2F"/><rect x="27" y="27" width="10" height="10" fill="#1B1B2F"/><rect x="15" y="39" width="10" height="10" fill="#1B1B2F"/><rect x="39" y="39" width="10" height="10" fill="#1B1B2F"/>`,
     check: ctx => ctx.dice.every(d=>d===ctx.dice[0]) && ctx.player.fiveOfAKindCount>=2},
   {id:'yamikaze', name:'Yamikaze', flavor:'What were you thinking?', description:'Rolled Yams after forgoing it', color:'#FF6B35', trigger:'turn',
+    faceContent: `<g transform="rotate(-35 32 32)"><rect x="-30" y="-20" width="34" height="120" fill="#FFD9C2"/><rect x="4" y="-20" width="34" height="120" fill="#FFC2D9"/><rect x="38" y="-20" width="34" height="120" fill="#FFF0DC"/></g><rect x="0" y="0" width="40" height="32" fill="#FFFFFF" opacity="0.45"/><rect x="15" y="13" width="10" height="10" fill="#1B1B2F"/><rect x="39" y="13" width="10" height="10" fill="#1B1B2F"/><rect x="15" y="27" width="10" height="10" fill="#1B1B2F"/><rect x="39" y="27" width="10" height="10" fill="#1B1B2F"/><rect x="15" y="41" width="10" height="10" fill="#1B1B2F"/><rect x="39" y="41" width="10" height="10" fill="#1B1B2F"/>`,
     check: ctx => ctx.dice.every(d=>d===ctx.dice[0]) && ctx.player.scores.yams === 0},
   {id:'yamine-yamal', name:'Yamine Yamal', flavor:'Bursting onto the scene', description:'Rolled Yams on the first turn', color:'#8B2942', trigger:'turn',
+    faceContent: `<rect x="4" y="4" width="56" height="56" fill="#F2EFE6"/><rect x="12" y="12" width="9" height="9" fill="#FF7DB0" opacity="0.75"/><rect x="36" y="20" width="8" height="8" fill="#6BB8FF" opacity="0.7"/><rect x="22" y="38" width="8" height="8" fill="#FFD86B" opacity="0.6"/><rect x="4" y="4" width="24" height="18" fill="#FFFFFF" opacity="0.4"/><rect x="36" y="40" width="24" height="20" fill="#1B1B2F" opacity="0.12"/><rect x="27" y="27" width="10" height="10" fill="#1B1B2F"/>`,
     check: ctx => ctx.key==='yams' && ctx.score>0 && ctx.filledCountBefore===0},
   {id:'lewis-yamilton', name:'Lewis Yamilton', flavor:"It's Yammertime", description:'Hit a Full House in a single roll', color:'#00A19B', trigger:'turn',
+    faceContent: `<rect x="4" y="4" width="56" height="56" fill="#EAF3F2"/><rect x="4" y="4" width="56" height="56" fill="#00A19B" opacity="0.28"/><rect x="4" y="4" width="6" height="56" fill="#007A75" opacity="0.55"/><rect x="54" y="4" width="6" height="56" fill="#007A75" opacity="0.55"/><g transform="rotate(-35 32 32)"><rect x="-4" y="-30" width="7" height="120" fill="#FFFFFF" opacity="0.55"/></g><rect x="15" y="15" width="10" height="10" fill="#1B1B2F"/><rect x="27" y="27" width="10" height="10" fill="#1B1B2F"/><rect x="39" y="39" width="10" height="10" fill="#1B1B2F"/>`,
     check: ctx => ctx.key==='fullhouse' && ctx.score>0 && ctx.rerollsLeft===2},
   {id:'gordon-yamsay', name:'Gordon Yamsay', flavor:'Idiot sandwich...', description:'Scored under 90pts in a game', color:'#8F6B1F', trigger:'gameEnd',
+    faceContent: `<g transform="rotate(-35 32 32)"><rect x="-30" y="-20" width="34" height="120" fill="#F0A878"/><rect x="4" y="-20" width="34" height="120" fill="#C06A3E"/><rect x="38" y="-20" width="34" height="120" fill="#7A3D1F"/></g><rect x="4" y="4" width="24" height="18" fill="#FFFFFF" opacity="0.3"/><rect x="36" y="40" width="24" height="20" fill="#000000" opacity="0.25"/><rect x="9" y="8" width="4" height="4" fill="#FFFFFF" opacity="0.9"/><rect x="15" y="15" width="10" height="10" fill="#3A1A0C"/><rect x="39" y="15" width="10" height="10" fill="#3A1A0C"/><rect x="15" y="39" width="10" height="10" fill="#3A1A0C"/><rect x="39" y="39" width="10" height="10" fill="#3A1A0C"/>`,
     check: (player, variant) => computeTotal(player.scores) < 90},
   {id:'jean-claude-van-yamme', name:'Jean-Claude van Yamme', flavor:'Flexible', description:'Rerolled all 5 dice and scored a special hand', color:'#6B6B80', trigger:'turn',
+    faceContent: `<g transform="rotate(-35 32 32)"><rect x="-30" y="-20" width="34" height="120" fill="#FF6B5C"/><rect x="4" y="-20" width="34" height="120" fill="#FF9E4A"/><rect x="38" y="-20" width="34" height="120" fill="#FFD24C"/></g><rect x="4" y="4" width="26" height="20" fill="#FFFFFF" opacity="0.3"/><rect x="36" y="40" width="24" height="20" fill="#1B1B2F" opacity="0.2"/><rect x="15" y="15" width="10" height="10" fill="#1B1B2F"/><rect x="39" y="15" width="10" height="10" fill="#1B1B2F"/><rect x="27" y="27" width="10" height="10" fill="#1B1B2F"/><rect x="15" y="39" width="10" height="10" fill="#1B1B2F"/><rect x="39" y="39" width="10" height="10" fill="#1B1B2F"/>`,
     check: ctx => ctx.rerollsLeft===0 && ctx.held.every(h=>!h) && ctx.score>0 && !NUM_KEYS.includes(ctx.key)},
-  {id:'yamesses-ii', name:'Yamesses II', flavor:'Ascend the throne', description:'Set a new High Score in a game with the current holder', color:'#C9A227', trigger:'special'},
+  {id:'yamesses-ii', name:'Yamesses II', flavor:'Ascend the throne', description:'Set a new High Score in a game with the current holder', color:'#C9A227', trigger:'special',
+    faceContent: `<g transform="rotate(-35 32 32)"><rect x="-30" y="-20" width="34" height="120" fill="#F0E4B8"/><rect x="4" y="-20" width="34" height="120" fill="#FFF6DC"/><rect x="38" y="-20" width="34" height="120" fill="#E8D4A0"/></g><rect x="0" y="0" width="40" height="32" fill="#FFFFFF" opacity="0.5"/><rect x="15" y="13" width="10" height="10" fill="#1B1B2F"/><rect x="39" y="13" width="10" height="10" fill="#1B1B2F"/><rect x="15" y="27" width="10" height="10" fill="#1B1B2F"/><rect x="39" y="27" width="10" height="10" fill="#1B1B2F"/><rect x="15" y="41" width="10" height="10" fill="#1B1B2F"/><rect x="39" y="41" width="10" height="10" fill="#1B1B2F"/>`},
   {id:'yameron-diaz', name:'Yameron Diaz', flavor:"There's something about Yams", description:'Completed a game while scoring on every hand', color:'#FF8FA3', trigger:'gameEnd',
+    faceContent: `<rect x="4" y="4" width="56" height="56" fill="#F2EFE6"/><rect x="12" y="34" width="9" height="9" fill="#FF8FA3" opacity="0.75"/><rect x="38" y="12" width="8" height="8" fill="#FFD86B" opacity="0.7"/><rect x="26" y="24" width="7" height="7" fill="#C77DFF" opacity="0.55"/><rect x="4" y="4" width="24" height="18" fill="#FFFFFF" opacity="0.4"/><rect x="36" y="40" width="24" height="20" fill="#1B1B2F" opacity="0.12"/><rect x="15" y="15" width="10" height="10" fill="#1B1B2F"/><rect x="39" y="39" width="10" height="10" fill="#1B1B2F"/>`,
     check: (player) => Object.keys(player.scores).every(k => player.scores[k] > 0)},
   {id:'yameela-yamil', name:'Yamsterdam', flavor:'All you need is Yams', description:'Rolled Yams but missed Sequence and Full House', color:'#3D9CD6', trigger:'gameEnd',
+    faceContent: `<rect x="4" y="4" width="56" height="56" fill="#F5EFE4"/><rect x="4" y="4" width="56" height="56" fill="#E38B2F" opacity="0.3"/><rect x="4" y="4" width="6" height="56" fill="#B5661A" opacity="0.55"/><rect x="54" y="4" width="6" height="56" fill="#B5661A" opacity="0.55"/><g transform="rotate(-35 32 32)"><rect x="-4" y="-30" width="7" height="120" fill="#FFFFFF" opacity="0.55"/></g><rect x="15" y="15" width="10" height="10" fill="#1B1B2F"/><rect x="27" y="27" width="10" height="10" fill="#1B1B2F"/><rect x="39" y="39" width="10" height="10" fill="#1B1B2F"/>`,
     check: (player) => player.scores.yams>0 && player.scores.sequence===0 && player.scores.fullhouse===0},
 ];
 function checkTurnRareDice(ctx){
@@ -565,7 +578,7 @@ function renderRareDieBannerOverlay(){
   return `
     <div class="raredie-overlay" id="raredieBannerBackdrop">
       <div class="raredie-banner-card" style="border-color:${a.color};">
-        <div class="raredie-banner-icon" style="background:${a.color};"></div>
+        <div class="raredie-banner-icon">${rareDieIconSvg(a)}</div>
         <div class="raredie-banner-name">${a.name}</div>
         <div class="raredie-banner-flavor">${a.flavor}</div>
         <div class="raredie-banner-description">${a.description}</div>
@@ -583,23 +596,29 @@ function attachRareDieHandlers(){
   const backdrop = document.getElementById('raredieBannerBackdrop');
   if(backdrop) backdrop.onclick = (e) => { if(e.target.id === 'raredieBannerBackdrop'){ state.raredieBanner = null; render(); } };
 }
-function pipCountFor(id){
-  let sum = 0;
-  for(let i=0;i<id.length;i++) sum += id.charCodeAt(i);
-  return (sum % 6) + 1;
+let rareDieIconCounter = 0;
+function rareDieIconSvg(a){
+  rareDieIconCounter++;
+  const clipId = 'rdclip' + rareDieIconCounter;
+  return `<svg width="100%" height="100%" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" shape-rendering="crispEdges" style="display:block;">
+    <defs><clipPath id="${clipId}"><rect x="4" y="4" width="56" height="56" rx="10"/></clipPath></defs>
+    <rect x="6" y="7" width="56" height="56" rx="10" fill="#C9C4B0"/>
+    <g clip-path="url(#${clipId})">${a.faceContent || ''}</g>
+    <rect x="4" y="4" width="56" height="56" rx="10" fill="none" stroke="#1B1B2F" stroke-width="3"/>
+  </svg>`;
 }
 function renderRareDiceProfileGrid(rareDiceMap){
   return `<div class="raredie-grid-profile">` + RARE_DICE.map(a => {
     const count = (rareDiceMap && rareDiceMap[a.id]) || 0;
     if(count <= 0) return `<div class="raredie-icon locked">?</div>`;
-    return `<div class="raredie-icon" data-raredie="${a.id}" style="background:${a.color};"><div class="raredie-pips">${pipsFor(pipCountFor(a.id))}</div>${count>1?`<span class="raredie-count">${count}</span>`:''}</div>`;
+    return `<div class="raredie-icon" data-raredie="${a.id}">${rareDieIconSvg(a)}${count>1?`<span class="raredie-count">${count}</span>`:''}</div>`;
   }).join('') + `</div>`;
 }
 function renderRareDiceEarnedRow(earnedIds){
   return `<div class="raredie-grid">` + earnedIds.map(id => {
     const a = RARE_DICE.find(x => x.id === id);
     if(!a) return '';
-    return `<div class="raredie-icon" data-raredie="${a.id}" style="background:${a.color};"><div class="raredie-pips">${pipsFor(pipCountFor(a.id))}</div></div>`;
+    return `<div class="raredie-icon" data-raredie="${a.id}">${rareDieIconSvg(a)}</div>`;
   }).join('') + `</div>`;
 }
 
