@@ -224,6 +224,7 @@
   table.full tbody tr:nth-child(even){ background: rgba(27,27,47,0.05); }
   table.full td.empty{ color:#C9C4B0; }
   table.full tfoot td{ font-weight:700; border-top:3px solid var(--ink); color: var(--ink); }
+  table.full tr.subtotal-row td{ font-weight:700; border-top:3px solid var(--ink); color: var(--ink); background: var(--surface); }
 
   .final{ padding: 30px 18px; text-align:center; }
   .final-card{ background: var(--surface); border:4px solid var(--ink); border-radius:14px; padding:26px 20px; box-shadow: 6px 6px 0 var(--ink); }
@@ -380,17 +381,17 @@ document.getElementById('howToModal').onclick = (e) => {
   if(e.target.id === 'howToModal') e.currentTarget.classList.add('hidden');
 };
 const CATS_CLASSIC = [
-  {key:'yams', label:'Yams', abbr:'Y!', points:'40 pts', group:'Special hands'},
-  {key:'sequence', label:'Sequence', abbr:'SQ', points:'30 pts', group:'Special hands'},
-  {key:'fullhouse', label:'Full house', abbr:'FH', points:'20 pts', group:'Special hands'},
-  {key:'hi', label:'Hi', abbr:'HI', points:'sum, as high as possible', group:'Special hands'},
-  {key:'lo', label:'Lo', abbr:'LO', points:'sum, below your Hi', group:'Special hands'},
   {key:'ones', label:'Ones', abbr:'1', points:'sum of 1s', group:'Numbers'},
   {key:'twos', label:'Twos', abbr:'2', points:'sum of 2s', group:'Numbers'},
   {key:'threes', label:'Threes', abbr:'3', points:'sum of 3s', group:'Numbers'},
   {key:'fours', label:'Fours', abbr:'4', points:'sum of 4s', group:'Numbers'},
   {key:'fives', label:'Fives', abbr:'5', points:'sum of 5s', group:'Numbers'},
   {key:'sixes', label:'Sixes', abbr:'6', points:'sum of 6s', group:'Numbers'},
+  {key:'fullhouse', label:'Full house', abbr:'FH', points:'20 pts', group:'Special hands'},
+  {key:'sequence', label:'Sequence', abbr:'SQ', points:'30 pts', group:'Special hands'},
+  {key:'hi', label:'Hi', abbr:'HI', points:'sum, as high as possible', group:'Special hands'},
+  {key:'lo', label:'Lo', abbr:'LO', points:'sum, below your Hi', group:'Special hands'},
+  {key:'yams', label:'Yams', abbr:'Y!', points:'40 pts', group:'Special hands'},
 ];
 const CATS_YAMBS = [
   {key:'yams', label:'Yams', abbr:'Y!', points:'40 + number rolled', group:'Special hands'},
@@ -1239,7 +1240,7 @@ function renderGame(){
       return topAndSheet(`<div class="catlist"><p class="hint">They're choosing which hand to go for this turn.</p></div>`, banner);
     }
     let declareHtml = '';
-    ['Special hands','Numbers'].forEach(g => {
+    ['Numbers','Special hands'].forEach(g => {
       const open = state.cats.filter(c => c.group===g && cur.scores[c.key]===null);
       if(open.length===0) return;
       declareHtml += `<h2>${g}</h2>`;
@@ -1297,7 +1298,7 @@ function renderGame(){
         </div>`;
     }
   } else if(state.hasRolledOnce){
-    let groups = ['Special hands','Numbers'];
+    let groups = state.variant === 'yambs' ? ['Special hands','Numbers'] : ['Numbers','Special hands'];
     groups.forEach(g => {
       catlistHtml += `<h2>${g}</h2>`;
       state.cats.filter(c=>c.group===g).forEach(c => {
@@ -1365,7 +1366,7 @@ function renderGame(){
 
 function renderSheet(){
   const headerCells = state.players.map(p => `<th>${p.name}</th>`).join('');
-  let rows = state.cats.map(c => {
+  function rowFor(c){
     const cells = state.players.map(p => {
       const v = p.scores[c.key];
       const faceHtml = (c.key==='yams' && v>0 && p.yamsFace) ? `<span class="yams-face">(${p.yamsFace})</span>` : '';
@@ -1374,21 +1375,34 @@ function renderSheet(){
       return `<td class="${v===null?'empty':''}">${voided ? `<span class="voided-score">${displayVal}</span>` : displayVal}${faceHtml}</td>`;
     }).join('');
     return `<tr><td title="${c.label}">${c.abbr}</td>${cells}</tr>`;
-  }).join('');
+  }
   const rules = bonusRulesFor(state.variant);
   const numbersCells = state.players.map(p => `<td>${numbersTotalOf(p.scores)}</td>`).join('');
   const bonusCells = state.players.map(p => { const b = bonusFor(p.scores); return `<td>${b.active ? '+'+b.amount : '-'}</td>`; }).join('');
   const totalCells = state.players.map(p => `<td>${computeTotal(p.scores)}</td>`).join('');
+  const subtotalRow = `<tr class="subtotal-row"><td title="Numbers subtotal">NUM</td>${numbersCells}</tr>`;
+  const bonusRow = `<tr class="subtotal-row"><td title="Numbers bonus (${rules.threshold}+)">BON</td>${bonusCells}</tr>`;
+  const totalRow = `<tr><td title="Total">TOT</td>${totalCells}</tr>`;
+
+  let bodyHtml, footHtml;
+  if(state.variant === 'yambs'){
+    // Original layout, untouched: hands in their own array order, everything else together at the end
+    bodyHtml = state.cats.map(rowFor).join('');
+    footHtml = subtotalRow + bonusRow + totalRow;
+  } else {
+    // Classic/Peril: numbers first, subtotal+bonus inline, then special hands, total at the very end
+    const numberRows = state.cats.filter(c => c.group === 'Numbers').map(rowFor).join('');
+    const specialRows = state.cats.filter(c => c.group === 'Special hands').map(rowFor).join('');
+    bodyHtml = numberRows + subtotalRow + bonusRow + specialRows;
+    footHtml = totalRow;
+  }
+
   return `
     <div class="sheet">
       <table class="full">
         <thead><tr><th>Hand</th>${headerCells}</tr></thead>
-        <tbody>${rows}</tbody>
-        <tfoot>
-          <tr><td title="Numbers subtotal">NUM</td>${numbersCells}</tr>
-          <tr><td title="Numbers bonus (${rules.threshold}+)">BON</td>${bonusCells}</tr>
-          <tr><td title="Total">TOT</td>${totalCells}</tr>
-        </tfoot>
+        <tbody>${bodyHtml}</tbody>
+        <tfoot>${footHtml}</tfoot>
       </table>
     </div>
   `;
