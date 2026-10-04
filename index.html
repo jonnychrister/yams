@@ -808,10 +808,12 @@ function applyRemoteGameData(data){
       state.online.initialSnapshotSeen = true;
       if(data.lastAction) state.shownActionTs = data.lastAction.ts; // seen it, but it may predate this connection - don't toast it
     } else if(data.lastAction && data.lastAction.ts !== state.shownActionTs){
-      state.shownActionTs = data.lastAction.ts;
-      state.toastAction = data.lastAction;
-      const thisTs = data.lastAction.ts;
-      setTimeout(() => { if(state.toastAction && state.toastAction.ts === thisTs){ state.toastAction = null; render(); } }, 3000);
+      state.shownActionTs = data.lastAction.ts; // always mark as seen, even if too stale to show, so it can't resurface later
+      if((Date.now() - data.lastAction.ts) < 8000){
+        state.toastAction = data.lastAction;
+        const thisTs = data.lastAction.ts;
+        setTimeout(() => { if(state.toastAction && state.toastAction.ts === thisTs){ state.toastAction = null; render(); } }, 3000);
+      }
     }
     render();
   }
